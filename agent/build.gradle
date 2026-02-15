@@ -1,0 +1,82 @@
+plugins {
+    id 'java-library'
+    id 'com.gradleup.shadow' version '9.3.1'
+}
+
+group = 'io.github.k7t3'
+version = '1.0-SNAPSHOT'
+
+// Determine JavaFX platform classifier based on OS and architecture
+ext.javafxPlatform = {
+    def os = System.getProperty('os.name').toLowerCase()
+    def arch = System.getProperty('os.arch').toLowerCase()
+    if (os.contains('mac') || os.contains('darwin')) {
+        return arch.contains('aarch64') || arch.contains('arm64') ? 'mac-aarch64' : 'mac'
+    } else if (os.contains('linux')) {
+        return arch.contains('aarch64') || arch.contains('arm64') ? 'linux-aarch64' : 'linux'
+    } else if (os.contains('win')) {
+        return 'win'
+    }
+    return 'linux' // fallback
+}()
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Jackson for JSON protocol serialization
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+
+    // JavaFX - compileOnly since inspector runs inside target JVM which already has JavaFX
+    compileOnly "org.openjfx:javafx-controls:21:${javafxPlatform}"
+    compileOnly "org.openjfx:javafx-graphics:21:${javafxPlatform}"
+    compileOnly "org.openjfx:javafx-base:21:${javafxPlatform}"
+
+    // Test dependencies
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+shadowJar {
+    archiveBaseName.set('fxgraph-agent')
+    archiveClassifier.set('')
+    archiveVersion.set('')
+    mergeServiceFiles()
+    manifest {
+        attributes(
+            'Agent-Class': 'io.github.k7t3.fxgraph.mcp.agent.inspector.FxGraphInspectorAgent',
+            'Premain-Class': 'io.github.k7t3.fxgraph.mcp.agent.inspector.FxGraphInspectorAgent',
+            'Can-Retransform-Classes': 'true',
+            'Can-Redefine-Classes': 'true',
+        )
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+            'Agent-Class': 'io.github.k7t3.fxgraph.mcp.agent.inspector.FxGraphInspectorAgent',
+            'Premain-Class': 'io.github.k7t3.fxgraph.mcp.agent.inspector.FxGraphInspectorAgent',
+            'Can-Retransform-Classes': 'true',
+            'Can-Redefine-Classes': 'true',
+        )
+    }
+}
+
+// Make shadowJar the default artifact for this project
+build.dependsOn shadowJar
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+    }
+}
