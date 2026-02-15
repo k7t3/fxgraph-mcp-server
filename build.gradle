@@ -27,11 +27,11 @@ dependencies {
 
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter:4.0.2'
-    implementation 'org.springframework.boot:spring-boot-starter-web:4.0.2'
 
-    // JavaFX
-    implementation 'org.openjfx:javafx-controls:21'
-    implementation 'org.openjfx:javafx-graphics:21'
+    // Agent subproject - provides protocol classes (AgentCommand, AgentResponse)
+    // used by the MCP server side for communication.
+    // The agent JAR itself is loaded separately into target JVMs via Attach API.
+    implementation project(':agent')
 
     // Jackson
     implementation 'com.fasterxml.jackson.core:jackson-databind'
@@ -55,6 +55,18 @@ shadowJar {
     archiveVersion.set('')
     mergeServiceFiles()
     manifest {
-        attributes 'Main-Class': 'io.github.k7t3.fxgraph.mcp.server.McpServerApplication'
+        attributes(
+            'Main-Class': 'io.github.k7t3.fxgraph.mcp.server.McpServerApplication',
+        )
     }
 }
+
+// Copy the agent shadow JAR next to the MCP server shadow JAR after build
+tasks.register('copyAgentJar', Copy) {
+    dependsOn ':agent:shadowJar'
+    from project(':agent').layout.buildDirectory.dir('libs')
+    include 'fxgraph-agent.jar'
+    into layout.buildDirectory.dir('libs')
+}
+
+shadowJar.finalizedBy copyAgentJar

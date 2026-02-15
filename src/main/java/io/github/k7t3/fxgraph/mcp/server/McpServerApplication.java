@@ -6,8 +6,10 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
+@ComponentScan(basePackages = "io.github.k7t3.fxgraph.mcp")
 public class McpServerApplication {
     public static void main(String[] args) {
         SpringApplication.run(McpServerApplication.class, args);

@@ -1,6 +1,9 @@
 package io.github.k7t3.fxgraph.mcp.tools;
 
 import io.github.k7t3.fxgraph.mcp.agent.JavaFxAgent;
+import io.github.k7t3.fxgraph.mcp.agent.SessionManager;
+import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentCommand;
+import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import io.github.k7t3.fxgraph.mcp.model.*;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -8,214 +11,185 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+/**
+ * MCP tool definitions for inspecting JavaFX application scene graphs.
+ * Each tool communicates with an injected agent running inside the target JVM.
+ */
 @Service
 public class FxgraphService {
-    
-    @Tool(description = "Get the scenegraph structure from a JavaFX application")
+
+    private final SessionManager sessionManager;
+
+    public FxgraphService(SessionManager sessionManager) {
+        this.sessionManager = sessionManager;
+    }
+
+    // ===================================================
+    // Discovery & Connection
+    // ===================================================
+
+    @Tool(description = "Discover running Java processes. Returns a list of JVM processes with their PIDs and main classes. Processes that are likely JavaFX applications are marked with isJavaFX=true.")
+    public Map<String, Object> discoverApplications() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            List<JavaFxApplication> apps = JavaFxAgent.discoverApplications();
+            result.put("success", true);
+            result.put("applications", apps);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        return result;
+    }
+
+    @Tool(description = "Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. Returns a sessionId to use with other tools.")
+    public Map<String, Object> connectApplication(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            JavaFxAgent agent = new JavaFxAgent(String.valueOf(pid));
+            agent.connect();
+
+            String sessionId = UUID.randomUUID().toString();
+            sessionManager.register(sessionId, agent);
+
+            result.put("success", true);
+            result.put("sessionId", sessionId);
+            result.put("agentPort", agent.getAgentPort());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        return result;
+    }
+
+    @Tool(description = "Disconnect from a connected JavaFX application and clean up resources.")
+    public Map<String, Object> disconnectApplication(
+            @ToolParam(description = "Session ID obtained from connectApplication") String sessionId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            if (!sessionManager.isActive(sessionId)) {
+                result.put("success", false);
+                result.put("error", "Session not found or already disconnected: " + sessionId);
+                return result;
+            }
+            sessionManager.remove(sessionId);
+            result.put("success", true);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        return result;
+    }
+
+    // ===================================================
+    // Scene Graph Inspection
+    // ===================================================
+
+    @Tool(description = "Get the list of JavaFX Stages (windows) in the connected application. Each stage has a stageId, title, dimensions, and a rootNodeId pointing to the root of its scene graph.")
+    public Map<String, Object> getStages(
+            @ToolParam(description = "Session ID") String sessionId) {
+        return sendAgentCommand(sessionId, new AgentCommand(AgentCommand.CommandType.GET_STAGES));
+    }
+
+    @Tool(description = "Get the scene graph tree structure from a connected JavaFX application. Returns a hierarchical tree of nodes with their type, bounds, visibility, and optionally properties. Use depth to limit how deep the tree is traversed.")
     public Map<String, Object> getScenegraph(
             @ToolParam(description = "Session ID") String sessionId,
-            @ToolParam(description = "Stage ID", required = false) String stageId,
-            @ToolParam(description = "Depth limit", required = false) Integer depth,
-            @ToolParam(description = "Include properties", required = false) Boolean includeProperties) {
-        
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            List<StageInfo> stages = new ArrayList<>();
-            StageInfo stage = new StageInfo();
-            stage.setStageId("stage-1");
-            stage.setTitle("Main Window");
-            stage.setWidth(800);
-            stage.setHeight(600);
-            stage.setX(100);
-            stage.setY(100);
-            stage.setFocused(true);
-            stage.setRootNodeId(1);
-            stages.add(stage);
-            
-            List<SVNode> rootNodes = new ArrayList<>();
-            SVNode root = new SVNode();
-            root.setNodeId(1);
-            root.setId("root");
-            root.setNodeClass("VBox");
-            root.setNodeClassName("javafx.scene.layout.VBox");
-            root.setVisible(true);
-            root.setLayoutBounds(new Bounds(0, 0, 800, 600));
-            root.setBoundsInParent(new Bounds(0, 0, 800, 600));
-            root.setLayoutX(0);
-            root.setLayoutY(0);
-            root.setNodeType("REAL_NODE");
-            root.setChildren(new ArrayList<>());
-            rootNodes.add(root);
-            
-            result.put("stages", stages);
-            result.put("rootNodes", rootNodes);
-            result.put("totalNodeCount", 1);
-            result.put("success", true);
-            
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
+            @ToolParam(description = "Stage ID to inspect (omit to get all stages)", required = false) String stageId,
+            @ToolParam(description = "Maximum depth to traverse (default: unlimited)", required = false) Integer depth,
+            @ToolParam(description = "Include property details for each node (default: false)", required = false) Boolean includeProperties) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (stageId != null) params.put("stageId", stageId);
+        if (depth != null) params.put("depth", depth);
+        if (includeProperties != null) params.put("includeProperties", includeProperties);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.GET_SCENEGRAPH, params));
     }
-    
-    @Tool(description = "Get detailed information about a specific node")
+
+    @Tool(description = "Get detailed information about a specific node including all its properties, children summary, bounds, style classes, and more. Use the nodeId obtained from getScenegraph.")
     public Map<String, Object> getNodeDetails(
             @ToolParam(description = "Session ID") String sessionId,
-            @ToolParam(description = "Node ID") int nodeId,
-            @ToolParam(description = "Detail types to include", required = false) List<String> detailTypes) {
-        
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            SVNode node = new SVNode();
-            node.setNodeId(nodeId);
-            node.setNodeClass("VBox");
-            node.setNodeClassName("javafx.scene.layout.VBox");
-            node.setVisible(true);
-            node.setLayoutBounds(new Bounds(0, 0, 800, 600));
-            node.setBoundsInParent(new Bounds(0, 0, 800, 600));
-            node.setNodeType("REAL_NODE");
-            
-            List<PropertyDetail> properties = new ArrayList<>();
-            PropertyDetail prop = new PropertyDetail();
-            prop.setName("spacing");
-            prop.setValue(10);
-            prop.setType("number");
-            prop.setWritable(true);
-            prop.setCategory("layout");
-            properties.add(prop);
-            
-            result.put("node", node);
-            result.put("properties", properties);
-            result.put("children", new ArrayList<>());
-            result.put("success", true);
-            
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
+            @ToolParam(description = "Node ID (identityHashCode of the JavaFX Node)") int nodeId) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("nodeId", nodeId);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.GET_NODE_DETAILS, params));
     }
-    
-    @Tool(description = "Watch a node for changes")
-    public Map<String, Object> watchNode(
-            @ToolParam(description = "Session ID") String sessionId,
-            @ToolParam(description = "Node ID") int nodeId,
-            @ToolParam(description = "Watch children", required = false) boolean watchChildren,
-            @ToolParam(description = "Properties to watch", required = false) List<String> watchProperties) {
-        
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            String subscriptionId = "sub-" + UUID.randomUUID().toString();
-            result.put("subscriptionId", subscriptionId);
-            result.put("success", true);
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
-    }
-    
-    @Tool(description = "Stop watching a node")
-    public Map<String, Object> unwatchNode(
-            @ToolParam(description = "Subscription ID") String subscriptionId) {
-        
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            result.put("success", true);
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
-    }
-    
-    @Tool(description = "Set a property value on a node")
+
+    // ===================================================
+    // Node Manipulation
+    // ===================================================
+
+    @Tool(description = "Set a property value on a JavaFX node. Supports setting text, numbers, booleans, colors, and style strings. Returns the old and new values.")
     public Map<String, Object> setProperty(
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Node ID") int nodeId,
-            @ToolParam(description = "Property name") String propertyName,
-            @ToolParam(description = "Property value as string") String value,
-            @ToolParam(description = "Value type (string, number, boolean, color)", required = false) String valueType) {
-        
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            result.put("success", true);
-            result.put("oldValue", null);
-            result.put("newValue", value);
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
+            @ToolParam(description = "Property name (e.g. 'text', 'style', 'visible', 'opacity')") String propertyName,
+            @ToolParam(description = "New value as string") String value,
+            @ToolParam(description = "Value type hint: string, number, boolean, color (optional)", required = false) String valueType) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("nodeId", nodeId);
+        params.put("propertyName", propertyName);
+        params.put("value", value);
+        if (valueType != null) params.put("valueType", valueType);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.SET_PROPERTY, params));
     }
-    
-    @Tool(description = "Select/highlight a node in the target application")
+
+    @Tool(description = "Highlight/select a node in the target JavaFX application by drawing a visual overlay (red border). Pass nodeId=0 to clear the highlight.")
     public Map<String, Object> selectNode(
             @ToolParam(description = "Session ID") String sessionId,
-            @ToolParam(description = "Node ID") int nodeId,
-            @ToolParam(description = "Show bounds", required = false) Boolean showBounds,
-            @ToolParam(description = "Show baseline", required = false) Boolean showBaseline) {
-        
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            result.put("success", true);
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
+            @ToolParam(description = "Node ID (use 0 to clear selection)") int nodeId,
+            @ToolParam(description = "Show bounds rectangle overlay (default: true)", required = false) Boolean showBounds) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("nodeId", nodeId);
+        params.put("showBounds", showBounds != null ? showBounds : true);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
-    
-    @Tool(description = "Discover running JavaFX applications")
-    public Map<String, Object> discoverApplications() {
-        Map<String, Object> result = new HashMap<>();
-        
+
+    // ===================================================
+    // Internal Helper
+    // ===================================================
+
+    /**
+     * Send a command to the agent via the session and return the response as a Map.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> sendAgentCommand(String sessionId, AgentCommand command) {
+        Map<String, Object> result = new LinkedHashMap<>();
         try {
-            List<JavaFxApplication> apps = JavaFxAgent.discoverApplications();
-            result.put("applications", apps);
-            result.put("success", true);
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
-    }
-    
-    @Tool(description = "Connect to a JavaFX application by PID")
-    public Map<String, Object> connectApplication(
-            @ToolParam(description = "Process ID of the JavaFX application") int pid) {
-        
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            JavaFxAgent agent = new JavaFxAgent(String.valueOf(pid));
-            if (agent.connect()) {
-                String sessionId = UUID.randomUUID().toString();
-                result.put("success", true);
-                result.put("sessionId", sessionId);
-            } else {
+            JavaFxAgent agent = sessionManager.get(sessionId);
+            if (agent == null || !agent.isConnected()) {
                 result.put("success", false);
-                result.put("error", "Failed to connect to application");
+                result.put("error", "Session not found or disconnected: " + sessionId);
+                return result;
+            }
+
+            AgentResponse response = agent.sendCommand(command);
+
+            result.put("success", response.isSuccess());
+            if (response.isSuccess()) {
+                if (response.getData() instanceof Map) {
+                    result.putAll((Map<String, Object>) response.getData());
+                } else {
+                    result.put("data", response.getData());
+                }
+            } else {
+                result.put("error", response.getError());
             }
         } catch (Exception e) {
             result.put("success", false);
-            result.put("error", e.getMessage());
+            result.put("error", "Communication error: " + e.getMessage());
         }
-        
         return result;
     }
 }

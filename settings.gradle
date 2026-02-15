@@ -1,1 +1,3 @@
 rootProject.name = 'fxgraph-mcp-server'
+
+include 'agent'
