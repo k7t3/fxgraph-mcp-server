@@ -7,38 +7,40 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 このMCPサーバーは以下の機能を提供します：
 - 実行中のJavaFXアプリケーションの検出と接続
 - シーングラフ構造の取得と分析
-- ノードプロパティの監視と変更
+- ノードプロパティの取得と変更
 - ノードの選択とハイライト
+
+## アーキテクチャ
+
+MCPサーバーはJava Attach APIを使用して対象のJavaFX JVMにインスペクタエージェントを注入します。エージェントはTCPソケット上でJSON行区切りプロトコルを使用してMCPサーバーと通信します。
+
+```
+MCP Client  <-->  MCP Server (STDIO)  <-->  Agent (TCP Socket)  <-->  JavaFX Scene Graph
+```
 
 ## ツール一覧
 
 ### 1. discoverApplications
 
-実行中のJavaFXアプリケーションを検出します。
+実行中のJavaプロセスを検出します。
 
-**説明**: Discover running JavaFX applications
+**説明**: Discover running Java processes. Returns a list of JVM processes with their PIDs and main classes. Processes that are likely JavaFX applications are marked with isJavaFX=true.
 
-**入力パラメータ**: なし（Void）
+**入力パラメータ**: なし
 
 **出力例**:
 ```json
 {
+  "success": true,
   "applications": [
     {
       "pid": 12345,
-      "name": "MyJavaFxApp",
-      "mainClass": "com.example.Main"
+      "mainClass": "com.example.MyApp",
+      "vmName": "OpenJDK 64-Bit Server VM",
+      "javaFX": true,
+      "connected": false
     }
-  ],
-  "success": true
-}
-```
-
-**エラー時の出力**:
-```json
-{
-  "success": false,
-  "error": "Failed to access JVM processes"
+  ]
 }
 ```
 
@@ -46,229 +48,181 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 
 ### 2. connectApplication
 
-PIDを指定してJavaFXアプリケーションに接続します。
+PIDを指定してJavaFXアプリケーションに接続します。対象JVMにインスペクタエージェントを注入し、通信チャネルを確立します。
 
-**説明**: Connect to a JavaFX application by PID
+**説明**: Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. Returns a sessionId to use with other tools.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| pid | integer | はい | Process ID of the JavaFX application |
-
-**入力例**:
-```json
-{
-  "pid": 12345
-}
-```
+| pid | integer | はい | Process ID of the target JavaFX application |
 
 **出力例**:
 ```json
 {
   "success": true,
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**エラー時の出力**:
-```json
-{
-  "success": false,
-  "error": "Failed to connect to application"
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "agentPort": 54321
 }
 ```
 
 ---
 
-### 3. getScenegraph
+### 3. disconnectApplication
 
-接続済みのJavaFXアプリケーションからシーングラフ構造を取得します。
+接続済みのJavaFXアプリケーションから切断します。
 
-**説明**: Get the scenegraph structure from a JavaFX application
+**説明**: Disconnect from a connected JavaFX application and clean up resources.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| sessionId | string | はい | Session ID obtained from connectApplication |
+
+**出力例**:
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### 4. getStages
+
+接続済みアプリケーションのステージ（ウィンドウ）一覧を取得します。
+
+**説明**: Get the list of JavaFX Stages (windows) in the connected application. Each stage has a stageId, title, dimensions, and a rootNodeId pointing to the root of its scene graph.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | sessionId | string | はい | Session ID |
-| stageId | string | いいえ | Stage ID（特定のステージを指定する場合） |
-| depth | integer | いいえ | 取得する階層の深さ制限 |
-| includeProperties | boolean | いいえ | プロパティ情報を含めるかどうか |
-
-**入力例**:
-```json
-{
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-  "stageId": "stage-1",
-  "depth": 3,
-  "includeProperties": true
-}
-```
 
 **出力例**:
 ```json
 {
-  "stages": [
+  "success": true,
+  "data": [
     {
-      "stageId": "stage-1",
+      "stageId": "123456789",
       "title": "Main Window",
       "width": 800,
       "height": 600,
       "x": 100,
       "y": 100,
       "focused": true,
-      "rootNodeId": 1
+      "rootNodeId": 987654321
+    }
+  ]
+}
+```
+
+---
+
+### 5. getScenegraph
+
+接続済みのJavaFXアプリケーションからシーングラフ構造を取得します。
+
+**説明**: Get the scene graph tree structure from a connected JavaFX application. Returns a hierarchical tree of nodes with their type, bounds, visibility, and optionally properties. Use depth to limit how deep the tree is traversed.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| sessionId | string | はい | Session ID |
+| stageId | string | いいえ | Stage ID to inspect (omit to get all stages) |
+| depth | integer | いいえ | Maximum depth to traverse (default: unlimited) |
+| includeProperties | boolean | いいえ | Include property details for each node (default: false) |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "stages": [
+    {
+      "stageId": "123456789",
+      "title": "Main Window",
+      "width": 800,
+      "height": 600,
+      "x": 100,
+      "y": 100,
+      "focused": true,
+      "rootNodeId": 987654321
     }
   ],
   "rootNodes": [
     {
-      "nodeId": 1,
+      "nodeId": 987654321,
       "id": "root",
       "nodeClass": "VBox",
       "nodeClassName": "javafx.scene.layout.VBox",
       "visible": true,
-      "layoutBounds": {
-        "minX": 0,
-        "minY": 0,
-        "width": 800,
-        "height": 600
-      },
-      "boundsInParent": {
-        "minX": 0,
-        "minY": 0,
-        "width": 800,
-        "height": 600
-      },
+      "layoutBounds": { "minX": 0, "minY": 0, "width": 800, "height": 600 },
+      "boundsInParent": { "minX": 0, "minY": 0, "width": 800, "height": 600 },
       "layoutX": 0,
       "layoutY": 0,
+      "style": "",
+      "styleClass": ["root"],
       "nodeType": "REAL_NODE",
+      "opacity": 1.0,
       "children": []
     }
   ],
-  "totalNodeCount": 1,
-  "success": true
+  "totalNodeCount": 1
 }
 ```
 
 ---
 
-### 4. getNodeDetails
+### 6. getNodeDetails
 
 特定のノードの詳細情報を取得します。
 
-**説明**: Get detailed information about a specific node
+**説明**: Get detailed information about a specific node including all its properties, children summary, bounds, style classes, and more. Use the nodeId obtained from getScenegraph.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | sessionId | string | はい | Session ID |
-| nodeId | integer | はい | Node ID |
-| detailTypes | array[string] | いいえ | 取得する詳細情報の種類 |
-
-**入力例**:
-```json
-{
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-  "nodeId": 123,
-  "detailTypes": ["properties", "children", "style"]
-}
-```
+| nodeId | integer | はい | Node ID (identityHashCode of the JavaFX Node) |
 
 **出力例**:
 ```json
 {
+  "success": true,
   "node": {
-    "nodeId": 123,
-    "nodeClass": "VBox",
-    "nodeClassName": "javafx.scene.layout.VBox",
+    "nodeId": 123456,
+    "nodeClass": "Button",
+    "nodeClassName": "javafx.scene.control.Button",
     "visible": true,
-    "layoutBounds": {
-      "minX": 0,
-      "minY": 0,
-      "width": 800,
-      "height": 600
-    },
-    "boundsInParent": {
-      "minX": 0,
-      "minY": 0,
-      "width": 800,
-      "height": 600
-    },
+    "layoutBounds": { "minX": 0, "minY": 0, "width": 100, "height": 30 },
+    "boundsInParent": { "minX": 10, "minY": 10, "width": 100, "height": 30 },
     "nodeType": "REAL_NODE"
   },
   "properties": [
     {
-      "name": "spacing",
-      "value": 10,
-      "type": "number",
+      "name": "text",
+      "value": "Click Me",
+      "type": "string",
       "writable": true,
-      "category": "layout"
+      "category": "content"
+    },
+    {
+      "name": "visible",
+      "value": true,
+      "type": "boolean",
+      "writable": true,
+      "category": "visual"
     }
   ],
-  "children": [],
-  "success": true
-}
-```
-
----
-
-### 5. watchNode
-
-ノードの変更を監視します。
-
-**説明**: Watch a node for changes
-
-**入力パラメータ**:
-| パラメータ | 型 | 必須 | 説明 |
-|-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
-| nodeId | integer | はい | Node ID |
-| watchChildren | boolean | いいえ | 子ノードの変更も監視するかどうか |
-| watchProperties | array[string] | いいえ | 監視するプロパティ名のリスト |
-
-**入力例**:
-```json
-{
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-  "nodeId": 123,
-  "watchChildren": true,
-  "watchProperties": ["text", "visible", "layoutBounds"]
-}
-```
-
-**出力例**:
-```json
-{
-  "subscriptionId": "sub-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "success": true
-}
-```
-
-**注意**: 監視は非同期で行われ、変更が検出されるとMCPサーバーから通知が送信されます。
-
----
-
-### 6. unwatchNode
-
-ノードの監視を停止します。
-
-**説明**: Stop watching a node
-
-**入力パラメータ**:
-| パラメータ | 型 | 必須 | 説明 |
-|-----------|-----|------|------|
-| subscriptionId | string | はい | watchNodeで取得したサブスクリプションID |
-
-**入力例**:
-```json
-{
-  "subscriptionId": "sub-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-}
-```
-
-**出力例**:
-```json
-{
-  "success": true
+  "children": [
+    {
+      "nodeId": 789012,
+      "nodeClass": "LabeledText",
+      "id": null,
+      "visible": true
+    }
+  ]
 }
 ```
 
@@ -278,27 +232,16 @@ PIDを指定してJavaFXアプリケーションに接続します。
 
 ノードのプロパティ値を設定します。
 
-**説明**: Set a property value on a node
+**説明**: Set a property value on a JavaFX node. Supports setting text, numbers, booleans, colors, and style strings. Returns the old and new values.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | sessionId | string | はい | Session ID |
 | nodeId | integer | はい | Node ID |
-| propertyName | string | はい | 設定するプロパティ名 |
-| value | any | はい | 新しい値 |
-| valueType | string | いいえ | 値の型（string, number, boolean, color等） |
-
-**入力例**:
-```json
-{
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-  "nodeId": 123,
-  "propertyName": "text",
-  "value": "Hello World",
-  "valueType": "string"
-}
-```
+| propertyName | string | はい | Property name (e.g. 'text', 'style', 'visible', 'opacity') |
+| value | string | はい | New value as string |
+| valueType | string | いいえ | Value type hint: string, number, boolean, color (optional) |
 
 **出力例**:
 ```json
@@ -309,10 +252,10 @@ PIDを指定してJavaFXアプリケーションに接続します。
 }
 ```
 
-**色を設定する例**:
+**スタイルを設定する例**:
 ```json
 {
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "sessionId": "...",
   "nodeId": 123,
   "propertyName": "style",
   "value": "-fx-background-color: #FF0000;",
@@ -326,34 +269,24 @@ PIDを指定してJavaFXアプリケーションに接続します。
 
 対象アプリケーションでノードを選択/ハイライト表示します。
 
-**説明**: Select/highlight a node in the target application
+**説明**: Highlight/select a node in the target JavaFX application by drawing a visual overlay (red border). Pass nodeId=0 to clear the highlight.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | sessionId | string | はい | Session ID |
-| nodeId | integer | はい | Node ID |
-| showBounds | boolean | いいえ | 境界ボックスを表示するかどうか |
-| showBaseline | boolean | いいえ | ベースラインを表示するかどうか |
-
-**入力例**:
-```json
-{
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-  "nodeId": 123,
-  "showBounds": true,
-  "showBaseline": false
-}
-```
+| nodeId | integer | はい | Node ID (use 0 to clear selection) |
+| showBounds | boolean | いいえ | Show bounds rectangle overlay (default: true) |
 
 **出力例**:
 ```json
 {
-  "success": true
+  "success": true,
+  "highlighted": true
 }
 ```
 
-**効果**: 対象のJavaFXアプリケーション内で指定されたノードが視覚的にハイライトされます（赤い枠線など）。
+**効果**: 対象のJavaFXアプリケーション内で指定されたノードが視覚的にハイライトされます（赤い枠線）。`nodeId=0`でハイライトを解除します。
 
 ---
 
@@ -363,48 +296,51 @@ PIDを指定してJavaFXアプリケーションに接続します。
 ```json
 {
   "pid": 12345,
-  "name": "ApplicationName",
-  "mainClass": "com.example.Main"
+  "mainClass": "com.example.Main",
+  "vmName": "OpenJDK 64-Bit Server VM",
+  "javaFX": true,
+  "connected": false
 }
 ```
 
 ### StageInfo
 ```json
 {
-  "stageId": "stage-1",
+  "stageId": "123456789",
   "title": "Window Title",
   "width": 800,
   "height": 600,
   "x": 100,
   "y": 100,
   "focused": true,
-  "rootNodeId": 1
+  "rootNodeId": 987654321
 }
 ```
 
 ### SVNode（Scenegraph Node）
 ```json
 {
-  "nodeId": 1,
+  "nodeId": 987654321,
   "id": "node-id",
   "nodeClass": "Button",
   "nodeClassName": "javafx.scene.control.Button",
   "visible": true,
-  "layoutBounds": {
-    "minX": 0,
-    "minY": 0,
-    "width": 100,
-    "height": 30
-  },
-  "boundsInParent": {
-    "minX": 10,
-    "minY": 10,
-    "width": 100,
-    "height": 30
-  },
+  "mouseTransparent": false,
+  "focused": false,
+  "layoutBounds": { "minX": 0, "minY": 0, "width": 100, "height": 30 },
+  "boundsInParent": { "minX": 10, "minY": 10, "width": 100, "height": 30 },
   "layoutX": 10,
   "layoutY": 10,
+  "style": "",
+  "styleClass": ["button"],
   "nodeType": "REAL_NODE",
+  "opacity": 1.0,
+  "scaleX": 1.0,
+  "scaleY": 1.0,
+  "rotate": 0,
+  "translateX": 0,
+  "translateY": 0,
+  "managed": true,
   "children": []
 }
 ```
@@ -416,9 +352,17 @@ PIDを指定してJavaFXアプリケーションに接続します。
   "value": "Button Text",
   "type": "string",
   "writable": true,
-  "category": "properties"
+  "category": "content"
 }
 ```
+
+プロパティカテゴリ:
+- `layout` - レイアウト関連（spacing, padding, alignment等）
+- `style` - スタイル関連（background, border, font, color等）
+- `visual` - 表示関連（visible, opacity, rotate, scale等）
+- `content` - コンテンツ関連（text, graphic, value, selected等）
+- `interaction` - インタラクション関連（event, handler, mouse, focus等）
+- `properties` - その他
 
 ### Bounds
 ```json
@@ -439,53 +383,69 @@ PIDを指定してJavaFXアプリケーションに接続します。
 1. **アプリケーションを検出**:
    ```
    discoverApplications()
-   → { "applications": [{ "pid": 12345, ... }] }
+   → { "applications": [{ "pid": 12345, "javaFX": true, ... }] }
    ```
 
 2. **アプリケーションに接続**:
    ```
    connectApplication(pid: 12345)
-   → { "sessionId": "xxx", "success": true }
+   → { "sessionId": "xxx", "agentPort": 54321, "success": true }
    ```
 
-3. **シーングラフを取得**:
+3. **ステージ一覧を取得**:
    ```
-   getScenegraph(sessionId: "xxx")
-   → { "stages": [...], "rootNodes": [...] }
-   ```
-
-4. **特定ノードの詳細を取得**:
-   ```
-   getNodeDetails(sessionId: "xxx", nodeId: 123)
-   → { "node": {...}, "properties": [...] }
+   getStages(sessionId: "xxx")
+   → { "data": [{ "stageId": "123", "title": "Main Window", ... }] }
    ```
 
-5. **ノードをハイライト**:
+4. **シーングラフを取得**:
    ```
-   selectNode(sessionId: "xxx", nodeId: 123, showBounds: true)
+   getScenegraph(sessionId: "xxx", depth: 3)
+   → { "stages": [...], "rootNodes": [...], "totalNodeCount": 42 }
+   ```
+
+5. **特定ノードの詳細を取得**:
+   ```
+   getNodeDetails(sessionId: "xxx", nodeId: 123456)
+   → { "node": {...}, "properties": [...], "children": [...] }
+   ```
+
+6. **ノードをハイライト**:
+   ```
+   selectNode(sessionId: "xxx", nodeId: 123456)
+   ```
+
+7. **切断**:
+   ```
+   disconnectApplication(sessionId: "xxx")
    ```
 
 ### プロパティ変更フロー
 
 1. **ノードの現在のプロパティを確認**:
    ```
-   getNodeDetails(sessionId: "xxx", nodeId: 123)
+   getNodeDetails(sessionId: "xxx", nodeId: 123456)
    ```
 
 2. **プロパティを変更**:
    ```
    setProperty(
      sessionId: "xxx",
-     nodeId: 123,
+     nodeId: 123456,
      propertyName: "text",
      value: "New Text"
    )
+   → { "oldValue": "Old Text", "newValue": "New Text" }
    ```
 
-3. **変更を確認**（オプション）:
+3. **ノードをハイライトして視覚的に確認**:
    ```
-   watchNode(sessionId: "xxx", nodeId: 123, watchProperties: ["text"])
-   → { "subscriptionId": "sub-xxx" }
+   selectNode(sessionId: "xxx", nodeId: 123456, showBounds: true)
+   ```
+
+4. **ハイライトを解除**:
+   ```
+   selectNode(sessionId: "xxx", nodeId: 0)
    ```
 
 ---
@@ -503,10 +463,11 @@ PIDを指定してJavaFXアプリケーションに接続します。
 
 ### 一般的なエラー
 
-- `Session not found`: 無効なセッションIDが指定された
-- `Node not found`: 指定されたノードIDが存在しない
-- `Failed to connect to application`: JavaFXアプリケーションへの接続に失敗
-- `Property is not writable`: 読み取り専用プロパティへの書き込みを試みた
+- `Session not found or disconnected` - 無効なセッションIDが指定されたか、接続が切れた
+- `Node not found` - 指定されたノードIDが存在しない
+- `Failed to connect to JavaFX application` - JavaFXアプリケーションへの接続に失敗
+- `Property not found or not writable` - 指定されたプロパティが存在しないか読み取り専用
+- `Agent started but port not found` - エージェントの起動に失敗
 
 ---
 
@@ -516,6 +477,7 @@ PIDを指定してJavaFXアプリケーションに接続します。
 - **Transport**: STDIO
 - **Server Name**: fxgraph-mcp-server
 - **Version**: 1.0.0
-- **Java Version**: 17+
-- **Spring Boot**: 3.2.0
+- **Java Version**: 21+
+- **Spring Boot**: 4.0.2
 - **Spring AI MCP**: 1.1.2
+- **ノードID**: `System.identityHashCode(node)` を使用（Scenic Viewの `node.hashCode()` と同等のアプローチ）
