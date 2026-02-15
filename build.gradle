@@ -70,3 +70,14 @@ tasks.register('copyAgentJar', Copy) {
 }
 
 shadowJar.finalizedBy copyAgentJar
+
+// Ensure tasks that use the libs directory depend on copyAgentJar
+tasks.named('distZip') { dependsOn copyAgentJar }
+tasks.named('distTar') { dependsOn copyAgentJar }
+tasks.named('startScripts') { dependsOn copyAgentJar }
+tasks.named('bootDistZip') { dependsOn copyAgentJar }
+tasks.named('bootDistTar') { dependsOn copyAgentJar }
+tasks.named('bootStartScripts') { dependsOn copyAgentJar }
+tasks.named('shadowDistZip') { dependsOn copyAgentJar }
+tasks.named('shadowDistTar') { dependsOn copyAgentJar }
+tasks.named('startShadowScripts') { dependsOn copyAgentJar }
