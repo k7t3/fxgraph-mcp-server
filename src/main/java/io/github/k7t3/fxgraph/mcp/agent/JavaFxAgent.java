@@ -11,6 +11,7 @@ import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * Manages the connection to a target JavaFX JVM.
@@ -223,11 +224,8 @@ public class JavaFxAgent {
 
                     // Check if JavaFX is available - the javafx.version system property
                     // is set when JavaFX runtime is loaded (same approach as Scenic View).
-                    // Also check classpath/module path as fallback for early detection.
-                    boolean likelyJavaFx = sysProps.containsKey("javafx.version")
-                            || classPath.contains("javafx")
-                            || classPath.contains("openjfx")
-                            || sysProps.getProperty("jdk.module.path", "").contains("javafx");
+                    // Also check classpath/module path for JavaFX artifacts as fallback.
+                    boolean likelyJavaFx = isJavaFxLikely(sysProps, classPath);
 
                     // Check if our agent is already injected
                     String agentPort = sysProps.getProperty("fxgraph.agent.port");
@@ -250,5 +248,50 @@ public class JavaFxAgent {
         }
 
         return apps;
+    }
+
+    private static boolean isJavaFxLikely(Properties sysProps, String classPath) {
+        if (sysProps.containsKey("javafx.version")) {
+            return true;
+        }
+        String modulePath = sysProps.getProperty("jdk.module.path", "");
+        return containsJavaFxArtifacts(modulePath) || containsJavaFxArtifacts(classPath);
+    }
+
+    private static boolean containsJavaFxArtifacts(String pathValue) {
+        if (pathValue == null || pathValue.isBlank()) {
+            return false;
+        }
+        String[] entries = pathValue.split(Pattern.quote(File.pathSeparator));
+        for (String entry : entries) {
+            if (entry == null || entry.isBlank()) {
+                continue;
+            }
+            File file = new File(entry);
+            if (file.isFile()) {
+                if (isJavaFxJarName(file.getName())) {
+                    return true;
+                }
+            } else if (file.isDirectory()) {
+                File[] matches = file.listFiles((dir, name) -> isJavaFxJarName(name));
+                if (matches != null && matches.length > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isJavaFxJarName(String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (!lower.endsWith(".jar")) {
+            return false;
+        }
+        if (lower.equals("jfxrt.jar")) {
+            return true;
+        }
+        return lower.startsWith("javafx-")
+                || lower.startsWith("javafx.")
+                || lower.startsWith("openjfx-");
     }
 }
