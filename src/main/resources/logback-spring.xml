@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Disable all logging to stdout for MCP STDIO transport -->
+    <root level="OFF">
+        <appender-ref ref="NULL"/>
+    </root>
+    
+    <!-- No-op appender -->
+    <appender name="NULL" class="ch.qos.logback.core.helpers.NOPAppender"/>
+</configuration>

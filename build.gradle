@@ -1,0 +1,60 @@
+plugins {
+    id 'application'
+    id 'com.gradleup.shadow' version '9.3.1'
+    id 'org.springframework.boot' version '4.0.2'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'io.github.k7t3'
+version = '1.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+application {
+    mainClass = 'io.github.k7t3.fxgraph.mcp.server.McpServerApplication'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring AI MCP Server Starter
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server:1.1.2'
+
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter:4.0.2'
+    implementation 'org.springframework.boot:spring-boot-starter-web:4.0.2'
+
+    // JavaFX
+    implementation 'org.openjfx:javafx-controls:21'
+    implementation 'org.openjfx:javafx-graphics:21'
+
+    // Jackson
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+    }
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    archiveVersion.set('')
+    mergeServiceFiles()
+    manifest {
+        attributes 'Main-Class': 'io.github.k7t3.fxgraph.mcp.server.McpServerApplication'
+    }
+}
