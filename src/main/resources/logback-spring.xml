@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Disable all logging to stdout for MCP STDIO transport -->
-    <root level="OFF">
-        <appender-ref ref="NULL"/>
+    <!-- Send logs to a file to keep STDIO clean for MCP -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>fxgraph.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>fxgraph.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="FILE"/>
     </root>
-    
-    <!-- No-op appender -->
-    <appender name="NULL" class="ch.qos.logback.core.helpers.NOPAppender"/>
 </configuration>
