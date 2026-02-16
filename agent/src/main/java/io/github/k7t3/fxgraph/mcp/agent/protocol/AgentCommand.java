@@ -19,6 +19,7 @@ public class AgentCommand {
         CLICK_NODE,
         REQUEST_FOCUS,
         TYPE_KEY,
+        TAKE_SCREENSHOT,
         PING,
         SHUTDOWN
     }

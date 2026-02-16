@@ -9,7 +9,8 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 - シーングラフ構造の取得と分析
 - ノードプロパティの取得と変更
 - ノードの選択とハイライト
-- ノードのクリック・フォーカス要求・キー入力
+- ノードのクリック・フォーカス要求・キー入力（JavaFX Robot）
+- ノード/シーングラフのスクリーンショット取得
 
 ## アーキテクチャ
 
@@ -295,7 +296,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 指定したノードにクリックイベントを送信します。
 
-**説明**: Click a JavaFX node by nodeId. Dispatches a synthetic primary mouse click event to the target node.
+**説明**: Click a JavaFX node by nodeId using JavaFX Robot for real input simulation.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -339,7 +340,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 キー入力イベントを送信します。
 
-**説明**: Type a key into a JavaFX node. If nodeId is omitted, the currently focused node is used.
+**説明**: Type a key into a JavaFX node using JavaFX Robot. If nodeId is omitted, the currently focused node is used.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -353,6 +354,34 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 {
   "success": true,
   "typed": true
+}
+```
+
+---
+
+### 12. takeScreenshot
+
+指定したノード、またはシーングラフ全体のスクリーンショットを取得します。
+
+**説明**: Take a screenshot of a specific node or the whole scene graph. Returns PNG as Base64.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| sessionId | string | はい | Session ID |
+| nodeId | integer | いいえ | Target node ID (optional; if omitted, captures full scene graph) |
+| stageId | string | いいえ | Stage ID for full scene graph capture (optional) |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "mimeType": "image/png",
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "width": 800,
+  "height": 600,
+  "targetType": "scenegraph",
+  "targetId": "123456789"
 }
 ```
 

@@ -10,16 +10,21 @@ import javafx.geometry.Bounds;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.SnapshotParameters;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.WritableImage;
 import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
+import javafx.scene.robot.Robot;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -36,6 +41,7 @@ public class SceneGraphInspector {
     /** Tracks highlighted overlay nodes so they can be removed. */
     private Node currentHighlight;
     private Parent currentHighlightParent;
+    private Robot robot;
 
     public SceneGraphInspector(ObjectMapper mapper) {
         this.mapper = mapper;
@@ -311,7 +317,7 @@ public class SceneGraphInspector {
     }
 
     // =============================================
-    // CLICK_NODE / REQUEST_FOCUS / TYPE_KEY
+    // CLICK_NODE / REQUEST_FOCUS / TYPE_KEY / TAKE_SCREENSHOT
     // =============================================
 
     public AgentResponse clickNode(Map<String, Object> params) {
@@ -366,21 +372,36 @@ public class SceneGraphInspector {
         }
     }
 
+    public AgentResponse takeScreenshot(Map<String, Object> params) {
+        try {
+            Integer nodeId = params != null && params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
+            String stageId = params != null ? (String) params.get("stageId") : null;
+
+            Map<String, Object> screenshot = runOnFxThread(() -> doTakeScreenshot(nodeId, stageId));
+            if (screenshot == null) {
+                if (nodeId != null) {
+                    return AgentResponse.error("Node not found: " + nodeId);
+                }
+                return AgentResponse.error("Stage not found");
+            }
+            return AgentResponse.success(screenshot);
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to take screenshot: " + e.getMessage());
+        }
+    }
+
     private Boolean doClickNode(int nodeId) {
         Node node = findNodeById(nodeId);
         if (node == null) return false;
 
-        Bounds bounds = node.localToScene(node.getBoundsInLocal());
+        Bounds bounds = node.localToScreen(node.getBoundsInLocal());
+        if (bounds == null) return false;
+
         double x = bounds.getMinX() + (bounds.getWidth() / 2.0);
         double y = bounds.getMinY() + (bounds.getHeight() / 2.0);
-        MouseEvent event = new MouseEvent(
-                MouseEvent.MOUSE_CLICKED,
-                x, y, x, y,
-                MouseButton.PRIMARY, 1,
-                false, false, false, false,
-                true, false, false, true,
-                false, false, null);
-        node.fireEvent(event);
+        Robot fxRobot = getRobot();
+        fxRobot.mouseMove(x, y);
+        fxRobot.mouseClick(MouseButton.PRIMARY);
         return true;
     }
 
@@ -397,17 +418,90 @@ public class SceneGraphInspector {
         Node target = nodeId != null ? findNodeById(nodeId) : findFocusedNode();
         if (target == null) return false;
 
-        boolean printable = key.length() == 1 && !Character.isISOControl(key.charAt(0));
-        KeyCode code = printable ? KeyCode.UNDEFINED
-                : Optional.ofNullable(KeyCode.getKeyCode(key.toUpperCase())).orElse(KeyCode.UNDEFINED);
-        String text = printable ? key : (code == KeyCode.UNDEFINED ? "" : key);
-
-        target.fireEvent(new KeyEvent(KeyEvent.KEY_PRESSED, KeyEvent.CHAR_UNDEFINED, text, code, false, false, false, false));
-        if (printable) {
-            target.fireEvent(new KeyEvent(KeyEvent.KEY_TYPED, key, "", KeyCode.UNDEFINED, false, false, false, false));
-        }
-        target.fireEvent(new KeyEvent(KeyEvent.KEY_RELEASED, KeyEvent.CHAR_UNDEFINED, text, code, false, false, false, false));
+        target.requestFocus();
+        Robot fxRobot = getRobot();
+        KeyCode code = resolveKeyCode(key);
+        if (code == null || code == KeyCode.UNDEFINED) return false;
+        fxRobot.keyType(code);
         return true;
+    }
+
+    private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId) {
+        WritableImage image;
+        String targetType;
+        String targetId;
+
+        if (nodeId != null) {
+            Node node = findNodeById(nodeId);
+            if (node == null) return null;
+            image = node.snapshot(new SnapshotParameters(), null);
+            targetType = "node";
+            targetId = String.valueOf(nodeId);
+        } else {
+            Stage stage = findStage(stageId);
+            if (stage == null || stage.getScene() == null) return null;
+            image = stage.getScene().snapshot(null);
+            targetType = "scenegraph";
+            targetId = String.valueOf(System.identityHashCode(stage));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("mimeType", "image/png");
+        result.put("imageBase64", toPngBase64(image));
+        result.put("width", (int) image.getWidth());
+        result.put("height", (int) image.getHeight());
+        result.put("targetType", targetType);
+        result.put("targetId", targetId);
+        return result;
+    }
+
+    private Stage findStage(String stageId) {
+        ObservableList<Window> windows = Window.getWindows();
+        for (Window window : windows) {
+            if (!(window instanceof Stage stage) || stage.getScene() == null || stage.getScene().getRoot() == null) {
+                continue;
+            }
+            if (stageId == null || stageId.equals(String.valueOf(System.identityHashCode(stage)))) {
+                return stage;
+            }
+        }
+        return null;
+    }
+
+    private String toPngBase64(WritableImage image) {
+        try {
+            int width = (int) image.getWidth();
+            int height = (int) image.getHeight();
+            BufferedImage buffered = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            PixelReader reader = image.getPixelReader();
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    buffered.setRGB(x, y, reader.getArgb(x, y));
+                }
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(buffered, "png", out);
+            return Base64.getEncoder().encodeToString(out.toByteArray());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to encode screenshot", e);
+        }
+    }
+
+    private KeyCode resolveKeyCode(String key) {
+        if (" ".equals(key)) return KeyCode.SPACE;
+        if (key.length() == 1) {
+            String upper = key.toUpperCase(Locale.ROOT);
+            return KeyCode.getKeyCode(upper);
+        }
+        return KeyCode.getKeyCode(key.toUpperCase(Locale.ROOT));
+    }
+
+    private Robot getRobot() {
+        if (robot == null) {
+            robot = new Robot();
+        }
+        return robot;
     }
 
     private Node findFocusedNode() {

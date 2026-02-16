@@ -156,7 +156,7 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
 
-    @Tool(description = "Click a JavaFX node by nodeId. Dispatches a synthetic primary mouse click event to the target node.")
+    @Tool(description = "Click a JavaFX node by nodeId using JavaFX Robot for real input simulation.")
     public Map<String, Object> clickNode(
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Node ID") int nodeId) {
@@ -180,7 +180,7 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.REQUEST_FOCUS, params));
     }
 
-    @Tool(description = "Type a key into a JavaFX node. If nodeId is omitted, the currently focused node is used.")
+    @Tool(description = "Type a key into a JavaFX node using JavaFX Robot. If nodeId is omitted, the currently focused node is used.")
     public Map<String, Object> typeKey(
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Key text or key code name (e.g. 'a', 'ENTER')") String key,
@@ -192,6 +192,20 @@ public class FxgraphService {
 
         return sendAgentCommand(sessionId,
                 new AgentCommand(AgentCommand.CommandType.TYPE_KEY, params));
+    }
+
+    @Tool(description = "Take a screenshot of a specific node or the whole scene graph. Returns PNG as Base64.")
+    public Map<String, Object> takeScreenshot(
+            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Target node ID (optional; if omitted, captures full scene graph)", required = false) Integer nodeId,
+            @ToolParam(description = "Stage ID for full scene graph capture (optional)", required = false) String stageId) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (nodeId != null) params.put("nodeId", nodeId);
+        if (stageId != null) params.put("stageId", stageId);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.TAKE_SCREENSHOT, params));
     }
 
     // ===================================================

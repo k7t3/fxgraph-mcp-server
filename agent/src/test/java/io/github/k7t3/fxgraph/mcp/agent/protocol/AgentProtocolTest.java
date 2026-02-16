@@ -79,6 +79,15 @@ class AgentProtocolTest {
     }
 
     @Test
+    void commandDeserializationForTakeScreenshot() throws Exception {
+        String json = "{\"command\":\"TAKE_SCREENSHOT\",\"params\":{\"stageId\":\"123\"}}";
+        AgentCommand cmd = mapper.readValue(json, AgentCommand.class);
+
+        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, cmd.getCommand());
+        assertEquals("123", cmd.getParams().get("stageId"));
+    }
+
+    @Test
     void allCommandTypesSerialize() throws Exception {
         for (AgentCommand.CommandType type : AgentCommand.CommandType.values()) {
             AgentCommand cmd = new AgentCommand(type);

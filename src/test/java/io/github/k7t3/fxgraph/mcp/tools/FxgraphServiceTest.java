@@ -352,6 +352,38 @@ class FxgraphServiceTest {
         assertFalse(captor.getValue().getParams().containsKey("nodeId"));
     }
 
+    @Test
+    void takeScreenshotWithNodeIdSendsCorrectParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("imageBase64", "abc")));
+        sessionManager.register("session-1", agent);
+
+        service.takeScreenshot("session-1", 88, null);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
+        assertEquals(88, captor.getValue().getParams().get("nodeId"));
+        assertFalse(captor.getValue().getParams().containsKey("stageId"));
+    }
+
+    @Test
+    void takeScreenshotScenegraphWithStageIdSendsCorrectParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("imageBase64", "abc")));
+        sessionManager.register("session-1", agent);
+
+        service.takeScreenshot("session-1", null, "stage-1");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
+        assertEquals("stage-1", captor.getValue().getParams().get("stageId"));
+        assertFalse(captor.getValue().getParams().containsKey("nodeId"));
+    }
+
     // ===== Agent communication error handling =====
 
     @Test
