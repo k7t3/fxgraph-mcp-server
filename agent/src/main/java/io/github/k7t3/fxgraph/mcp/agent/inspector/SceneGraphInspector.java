@@ -13,6 +13,7 @@ import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
+import javafx.scene.image.WritablePixelFormat;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
 import javafx.scene.paint.Color;
@@ -35,6 +36,8 @@ import java.util.concurrent.TimeUnit;
  * All scene graph access must happen on the JavaFX Application Thread.
  */
 public class SceneGraphInspector {
+
+    private static final String SPACE_CHAR = " ";
 
     private final ObjectMapper mapper;
 
@@ -327,9 +330,9 @@ public class SceneGraphInspector {
             }
             int nodeId = ((Number) params.get("nodeId")).intValue();
 
-            Boolean clicked = runOnFxThread(() -> doClickNode(nodeId));
-            if (clicked == null || !clicked) {
-                return AgentResponse.error("Node not found: " + nodeId);
+            String error = runOnFxThread(() -> doClickNode(nodeId));
+            if (error != null) {
+                return AgentResponse.error(error);
             }
             return AgentResponse.success(Map.of("clicked", true));
         } catch (Exception e) {
@@ -362,9 +365,9 @@ public class SceneGraphInspector {
             String key = String.valueOf(params.get("key"));
             Integer nodeId = params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
 
-            Boolean typed = runOnFxThread(() -> doTypeKey(nodeId, key));
-            if (typed == null || !typed) {
-                return AgentResponse.error(nodeId != null ? "Node not found: " + nodeId : "No focused node found");
+            String error = runOnFxThread(() -> doTypeKey(nodeId, key));
+            if (error != null) {
+                return AgentResponse.error(error);
             }
             return AgentResponse.success(Map.of("typed", true));
         } catch (Exception e) {
@@ -390,19 +393,19 @@ public class SceneGraphInspector {
         }
     }
 
-    private Boolean doClickNode(int nodeId) {
+    private String doClickNode(int nodeId) {
         Node node = findNodeById(nodeId);
-        if (node == null) return false;
+        if (node == null) return "Node not found: " + nodeId;
 
         Bounds bounds = node.localToScreen(node.getBoundsInLocal());
-        if (bounds == null) return false;
+        if (bounds == null) return "Node is not visible on screen: " + nodeId;
 
         double x = bounds.getMinX() + (bounds.getWidth() / 2.0);
         double y = bounds.getMinY() + (bounds.getHeight() / 2.0);
         Robot fxRobot = getRobot();
         fxRobot.mouseMove(x, y);
         fxRobot.mouseClick(MouseButton.PRIMARY);
-        return true;
+        return null;
     }
 
     private Boolean doRequestFocus(int nodeId) {
@@ -412,18 +415,18 @@ public class SceneGraphInspector {
         return true;
     }
 
-    private Boolean doTypeKey(Integer nodeId, String key) {
-        if (key == null || key.isEmpty()) return false;
+    private String doTypeKey(Integer nodeId, String key) {
+        if (key == null || key.isEmpty()) return "key is required";
 
         Node target = nodeId != null ? findNodeById(nodeId) : findFocusedNode();
-        if (target == null) return false;
+        if (target == null) return nodeId != null ? "Node not found: " + nodeId : "No focused node found";
 
         target.requestFocus();
         Robot fxRobot = getRobot();
         KeyCode code = resolveKeyCode(key);
-        if (code == null || code == KeyCode.UNDEFINED) return false;
+        if (code == null || code == KeyCode.UNDEFINED) return "Unsupported key: " + key;
         fxRobot.keyType(code);
-        return true;
+        return null;
     }
 
     private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId) {
@@ -474,11 +477,9 @@ public class SceneGraphInspector {
             int height = (int) image.getHeight();
             BufferedImage buffered = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
             PixelReader reader = image.getPixelReader();
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    buffered.setRGB(x, y, reader.getArgb(x, y));
-                }
-            }
+            int[] argb = new int[width * height];
+            reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), argb, 0, width);
+            buffered.setRGB(0, 0, width, height, argb, 0, width);
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             ImageIO.write(buffered, "png", out);
@@ -489,12 +490,9 @@ public class SceneGraphInspector {
     }
 
     private KeyCode resolveKeyCode(String key) {
-        if (" ".equals(key)) return KeyCode.SPACE;
-        if (key.length() == 1) {
-            String upper = key.toUpperCase(Locale.ROOT);
-            return KeyCode.getKeyCode(upper);
-        }
-        return KeyCode.getKeyCode(key.toUpperCase(Locale.ROOT));
+        String uppercaseKey = key.toUpperCase(Locale.ROOT);
+        if (SPACE_CHAR.equals(key)) return KeyCode.SPACE;
+        return KeyCode.getKeyCode(uppercaseKey);
     }
 
     private Robot getRobot() {
