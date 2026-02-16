@@ -283,6 +283,75 @@ class FxgraphServiceTest {
         assertEquals(true, captor.getValue().getParams().get("showBounds"));
     }
 
+    // ===== clickNode / requestFocus / typeKey =====
+
+    @Test
+    void clickNodeWithInvalidSession() {
+        Map<String, Object> result = service.clickNode("invalid", 42);
+        assertFalse((boolean) result.get("success"));
+    }
+
+    @Test
+    void clickNodeSendsCorrectParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("clicked", true)));
+        sessionManager.register("session-1", agent);
+
+        service.clickNode("session-1", 42);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        assertEquals(AgentCommand.CommandType.CLICK_NODE, captor.getValue().getCommand());
+        assertEquals(42, captor.getValue().getParams().get("nodeId"));
+    }
+
+    @Test
+    void requestFocusSendsCorrectParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("focused", true)));
+        sessionManager.register("session-1", agent);
+
+        service.requestFocus("session-1", 77);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        assertEquals(AgentCommand.CommandType.REQUEST_FOCUS, captor.getValue().getCommand());
+        assertEquals(77, captor.getValue().getParams().get("nodeId"));
+    }
+
+    @Test
+    void typeKeyWithNodeIdSendsCorrectParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("typed", true)));
+        sessionManager.register("session-1", agent);
+
+        service.typeKey("session-1", "ENTER", 88);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        assertEquals(AgentCommand.CommandType.TYPE_KEY, captor.getValue().getCommand());
+        assertEquals("ENTER", captor.getValue().getParams().get("key"));
+        assertEquals(88, captor.getValue().getParams().get("nodeId"));
+    }
+
+    @Test
+    void typeKeyWithoutNodeIdOmitsNodeParam() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("typed", true)));
+        sessionManager.register("session-1", agent);
+
+        service.typeKey("session-1", "a", null);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        assertEquals("a", captor.getValue().getParams().get("key"));
+        assertFalse(captor.getValue().getParams().containsKey("nodeId"));
+    }
+
     // ===== Agent communication error handling =====
 
     @Test

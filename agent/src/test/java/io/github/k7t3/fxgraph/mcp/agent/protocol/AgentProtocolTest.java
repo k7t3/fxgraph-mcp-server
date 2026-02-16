@@ -69,6 +69,16 @@ class AgentProtocolTest {
     }
 
     @Test
+    void commandDeserializationForTypeKey() throws Exception {
+        String json = "{\"command\":\"TYPE_KEY\",\"params\":{\"nodeId\":100,\"key\":\"ENTER\"}}";
+        AgentCommand cmd = mapper.readValue(json, AgentCommand.class);
+
+        assertEquals(AgentCommand.CommandType.TYPE_KEY, cmd.getCommand());
+        assertEquals(100, ((Number) cmd.getParams().get("nodeId")).intValue());
+        assertEquals("ENTER", cmd.getParams().get("key"));
+    }
+
+    @Test
     void allCommandTypesSerialize() throws Exception {
         for (AgentCommand.CommandType type : AgentCommand.CommandType.values()) {
             AgentCommand cmd = new AgentCommand(type);

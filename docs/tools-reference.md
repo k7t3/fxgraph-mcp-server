@@ -9,6 +9,7 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 - シーングラフ構造の取得と分析
 - ノードプロパティの取得と変更
 - ノードの選択とハイライト
+- ノードのクリック・フォーカス要求・キー入力
 
 ## アーキテクチャ
 
@@ -287,6 +288,73 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 ```
 
 **効果**: 対象のJavaFXアプリケーション内で指定されたノードが視覚的にハイライトされます（赤い枠線）。`nodeId=0`でハイライトを解除します。
+
+---
+
+### 9. clickNode
+
+指定したノードにクリックイベントを送信します。
+
+**説明**: Click a JavaFX node by nodeId. Dispatches a synthetic primary mouse click event to the target node.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| sessionId | string | はい | Session ID |
+| nodeId | integer | はい | Node ID |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "clicked": true
+}
+```
+
+---
+
+### 10. requestFocus
+
+指定したノードにフォーカスを要求します。
+
+**説明**: Request keyboard focus for a JavaFX node by nodeId.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| sessionId | string | はい | Session ID |
+| nodeId | integer | はい | Node ID |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "focused": true
+}
+```
+
+---
+
+### 11. typeKey
+
+キー入力イベントを送信します。
+
+**説明**: Type a key into a JavaFX node. If nodeId is omitted, the currently focused node is used.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| sessionId | string | はい | Session ID |
+| key | string | はい | Key text or key code name (e.g. 'a', 'ENTER') |
+| nodeId | integer | いいえ | Target node ID (optional, defaults to focused node) |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "typed": true
+}
+```
 
 ---
 

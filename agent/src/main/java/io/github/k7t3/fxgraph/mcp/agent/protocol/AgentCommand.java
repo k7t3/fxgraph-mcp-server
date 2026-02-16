@@ -16,6 +16,9 @@ public class AgentCommand {
         GET_NODE_DETAILS,
         SET_PROPERTY,
         SELECT_NODE,
+        CLICK_NODE,
+        REQUEST_FOCUS,
+        TYPE_KEY,
         PING,
         SHUTDOWN
     }

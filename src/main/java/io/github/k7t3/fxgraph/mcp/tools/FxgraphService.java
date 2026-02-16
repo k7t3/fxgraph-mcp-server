@@ -156,6 +156,44 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
 
+    @Tool(description = "Click a JavaFX node by nodeId. Dispatches a synthetic primary mouse click event to the target node.")
+    public Map<String, Object> clickNode(
+            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Node ID") int nodeId) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("nodeId", nodeId);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.CLICK_NODE, params));
+    }
+
+    @Tool(description = "Request keyboard focus for a JavaFX node by nodeId.")
+    public Map<String, Object> requestFocus(
+            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Node ID") int nodeId) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("nodeId", nodeId);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.REQUEST_FOCUS, params));
+    }
+
+    @Tool(description = "Type a key into a JavaFX node. If nodeId is omitted, the currently focused node is used.")
+    public Map<String, Object> typeKey(
+            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Key text or key code name (e.g. 'a', 'ENTER')") String key,
+            @ToolParam(description = "Target node ID (optional, defaults to focused node)", required = false) Integer nodeId) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("key", key);
+        if (nodeId != null) params.put("nodeId", nodeId);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.TYPE_KEY, params));
+    }
+
     // ===================================================
     // Internal Helper
     // ===================================================

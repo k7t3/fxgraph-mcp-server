@@ -10,6 +10,10 @@ import javafx.geometry.Bounds;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
@@ -304,6 +308,112 @@ public class SceneGraphInspector {
         }
 
         return true;
+    }
+
+    // =============================================
+    // CLICK_NODE / REQUEST_FOCUS / TYPE_KEY
+    // =============================================
+
+    public AgentResponse clickNode(Map<String, Object> params) {
+        try {
+            if (params == null || params.get("nodeId") == null) {
+                return AgentResponse.error("nodeId is required");
+            }
+            int nodeId = ((Number) params.get("nodeId")).intValue();
+
+            Boolean clicked = runOnFxThread(() -> doClickNode(nodeId));
+            if (clicked == null || !clicked) {
+                return AgentResponse.error("Node not found: " + nodeId);
+            }
+            return AgentResponse.success(Map.of("clicked", true));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to click node: " + e.getMessage());
+        }
+    }
+
+    public AgentResponse requestFocus(Map<String, Object> params) {
+        try {
+            if (params == null || params.get("nodeId") == null) {
+                return AgentResponse.error("nodeId is required");
+            }
+            int nodeId = ((Number) params.get("nodeId")).intValue();
+
+            Boolean focused = runOnFxThread(() -> doRequestFocus(nodeId));
+            if (focused == null || !focused) {
+                return AgentResponse.error("Node not found: " + nodeId);
+            }
+            return AgentResponse.success(Map.of("focused", true));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to request focus: " + e.getMessage());
+        }
+    }
+
+    public AgentResponse typeKey(Map<String, Object> params) {
+        try {
+            if (params == null || params.get("key") == null) {
+                return AgentResponse.error("key is required");
+            }
+            String key = String.valueOf(params.get("key"));
+            Integer nodeId = params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
+
+            Boolean typed = runOnFxThread(() -> doTypeKey(nodeId, key));
+            if (typed == null || !typed) {
+                return AgentResponse.error(nodeId != null ? "Node not found: " + nodeId : "No focused node found");
+            }
+            return AgentResponse.success(Map.of("typed", true));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to type key: " + e.getMessage());
+        }
+    }
+
+    private Boolean doClickNode(int nodeId) {
+        Node node = findNodeById(nodeId);
+        if (node == null) return false;
+
+        Bounds bounds = node.localToScene(node.getBoundsInLocal());
+        double x = bounds.getMinX() + (bounds.getWidth() / 2.0);
+        double y = bounds.getMinY() + (bounds.getHeight() / 2.0);
+        MouseEvent event = new MouseEvent(
+                MouseEvent.MOUSE_CLICKED,
+                x, y, x, y,
+                MouseButton.PRIMARY, 1,
+                false, false, false, false,
+                true, false, false, true,
+                false, false, null);
+        node.fireEvent(event);
+        return true;
+    }
+
+    private Boolean doRequestFocus(int nodeId) {
+        Node node = findNodeById(nodeId);
+        if (node == null) return false;
+        node.requestFocus();
+        return true;
+    }
+
+    private Boolean doTypeKey(Integer nodeId, String key) {
+        if (key == null || key.isEmpty()) return false;
+
+        Node target = nodeId != null ? findNodeById(nodeId) : findFocusedNode();
+        if (target == null) return false;
+
+        String character = key.length() == 1 ? key : "";
+        KeyCode code = key.length() == 1 ? KeyCode.UNDEFINED : Optional.ofNullable(KeyCode.getKeyCode(key.toUpperCase())).orElse(KeyCode.UNDEFINED);
+
+        target.fireEvent(new KeyEvent(KeyEvent.KEY_PRESSED, character, key, code, false, false, false, false));
+        target.fireEvent(new KeyEvent(KeyEvent.KEY_TYPED, key, character, KeyCode.UNDEFINED, false, false, false, false));
+        target.fireEvent(new KeyEvent(KeyEvent.KEY_RELEASED, character, key, code, false, false, false, false));
+        return true;
+    }
+
+    private Node findFocusedNode() {
+        ObservableList<Window> windows = Window.getWindows();
+        for (Window window : windows) {
+            if (window.getScene() == null) continue;
+            Node focusOwner = window.getScene().getFocusOwner();
+            if (focusOwner != null) return focusOwner;
+        }
+        return null;
     }
 
     private void removeHighlight() {
