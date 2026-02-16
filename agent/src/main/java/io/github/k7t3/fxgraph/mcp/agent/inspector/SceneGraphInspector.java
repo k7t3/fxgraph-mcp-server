@@ -397,12 +397,16 @@ public class SceneGraphInspector {
         Node target = nodeId != null ? findNodeById(nodeId) : findFocusedNode();
         if (target == null) return false;
 
-        String character = key.length() == 1 ? key : "";
-        KeyCode code = key.length() == 1 ? KeyCode.UNDEFINED : Optional.ofNullable(KeyCode.getKeyCode(key.toUpperCase())).orElse(KeyCode.UNDEFINED);
+        boolean printable = key.length() == 1 && !Character.isISOControl(key.charAt(0));
+        KeyCode code = printable ? KeyCode.UNDEFINED
+                : Optional.ofNullable(KeyCode.getKeyCode(key.toUpperCase())).orElse(KeyCode.UNDEFINED);
+        String text = printable ? key : (code == KeyCode.UNDEFINED ? "" : key);
 
-        target.fireEvent(new KeyEvent(KeyEvent.KEY_PRESSED, character, key, code, false, false, false, false));
-        target.fireEvent(new KeyEvent(KeyEvent.KEY_TYPED, key, character, KeyCode.UNDEFINED, false, false, false, false));
-        target.fireEvent(new KeyEvent(KeyEvent.KEY_RELEASED, character, key, code, false, false, false, false));
+        target.fireEvent(new KeyEvent(KeyEvent.KEY_PRESSED, KeyEvent.CHAR_UNDEFINED, text, code, false, false, false, false));
+        if (printable) {
+            target.fireEvent(new KeyEvent(KeyEvent.KEY_TYPED, key, "", KeyCode.UNDEFINED, false, false, false, false));
+        }
+        target.fireEvent(new KeyEvent(KeyEvent.KEY_RELEASED, KeyEvent.CHAR_UNDEFINED, text, code, false, false, false, false));
         return true;
     }
 
