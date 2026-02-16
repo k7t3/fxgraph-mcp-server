@@ -24,12 +24,12 @@ FXGraph MCP Serverは、実行中のJavaFXアプリケーションに接続し�
 ### ビルド
 
 ```bash
-./gradlew shadowJar
+./gradlew :mcp-server:shadowJar
 ```
 
 ビルド成果物：
-- `build/libs/fxgraph-mcp-server.jar` - MCPサーバー本体 (~21MB)
-- `build/libs/fxgraph-agent.jar` - エージェントJAR (~2MB、対象JVMに注入)
+- `mcp-server/build/libs/fxgraph-mcp-server.jar` - MCPサーバー本体 (~21MB)
+- `mcp-server/build/libs/fxgraph-agent.jar` - エージェントJAR (~2MB、対象JVMに注入)
 
 ### テスト
 
@@ -42,7 +42,7 @@ FXGraph MCP Serverは、実行中のJavaFXアプリケーションに接続し�
 MCPサーバーはSTDIOトランスポートで動作します。通常はMCPクライアント（Claude Desktop等）から起動されます：
 
 ```bash
-java -jar build/libs/fxgraph-mcp-server.jar
+java -jar mcp-server/build/libs/fxgraph-mcp-server.jar
 ```
 
 ### MCPクライアントへの登録
@@ -212,15 +212,17 @@ fxgraph-mcp-server/
 │           └── protocol/           # JSONプロトコル（共有）
 │               ├── AgentCommand.java
 │               └── AgentResponse.java
-├── src/main/java/
-│   └── io/github/k7t3/fxgraph/mcp/
-│       ├── agent/                  # Attach API・セッション管理
-│       │   ├── JavaFxAgent.java
-│       │   └── SessionManager.java
-│       ├── model/                  # データモデル
-│       ├── server/                 # Spring Bootエントリポイント
-│       └── tools/                  # MCPツール定義
-│           └── FxgraphService.java
+├── mcp-server/                     # MCPサーバーサブプロジェクト
+│   └── src/main/java/
+│       └── io/github/k7t3/fxgraph/mcp/
+│           ├── agent/              # Attach API・セッション管理
+│           │   ├── JavaFxAgent.java
+│           │   └── SessionManager.java
+│           ├── model/              # データモデル
+│           ├── server/             # Spring Bootエントリポイント
+│           └── tools/              # MCPツール定義
+│               └── FxgraphService.java
+├── javafx-test-app/                # テスト用JavaFXアプリ（将来実装）
 ├── docs/
 │   └── tools-reference.md          # ツール詳細仕様
 └── AGENTS.md                       # 開発者向けアーキテクチャガイド
