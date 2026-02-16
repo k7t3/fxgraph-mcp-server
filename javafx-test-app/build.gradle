@@ -1,0 +1,19 @@
+plugins {
+    id 'application'
+}
+
+group = 'io.github.k7t3'
+version = '1.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Dependencies will be added later
+}
