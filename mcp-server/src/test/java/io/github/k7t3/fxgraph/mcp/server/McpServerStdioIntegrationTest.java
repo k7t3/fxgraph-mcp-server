@@ -165,7 +165,7 @@ class McpServerStdioIntegrationTest {
     }
 
     @Test
-    void listToolsReturnToolsWithDescriptions() {
+    void listToolsReturnsToolsWithDescriptions() {
         client.initialize();
 
         McpSchema.ListToolsResult result = client.listTools();
@@ -178,7 +178,7 @@ class McpServerStdioIntegrationTest {
     }
 
     @Test
-    void listToolsReturnToolsWithInputSchemas() {
+    void listToolsReturnsToolsWithInputSchemas() {
         client.initialize();
 
         McpSchema.ListToolsResult result = client.listTools();
