@@ -47,6 +47,7 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    dependsOn shadowJar
     testLogging {
         events "passed", "skipped", "failed"
         showStandardStreams = true
