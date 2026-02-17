@@ -1,3 +1,5 @@
 rootProject.name = 'fxgraph-mcp-server'
 
 include 'agent'
+include 'mcp-server'
+include 'javafx-test-app'
