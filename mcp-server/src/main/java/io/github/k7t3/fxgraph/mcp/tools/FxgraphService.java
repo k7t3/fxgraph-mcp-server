@@ -92,29 +92,35 @@ public class FxgraphService {
         return sendAgentCommand(sessionId, new AgentCommand(AgentCommand.CommandType.GET_STAGES));
     }
 
-    @Tool(description = "Get the scene graph tree structure from a connected JavaFX application. Returns a hierarchical tree of nodes with their type, bounds, visibility, and optionally properties. Use depth to limit how deep the tree is traversed.")
+    @Tool(description = "Get the scene graph tree structure from a connected JavaFX application. Returns a lightweight hierarchical tree by default. Use depth to limit tree depth, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.")
     public Map<String, Object> getScenegraph(
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Stage ID to inspect (omit to get all stages)", required = false) String stageId,
             @ToolParam(description = "Maximum depth to traverse (default: unlimited)", required = false) Integer depth,
-            @ToolParam(description = "Include property details for each node (default: false)", required = false) Boolean includeProperties) {
+            @ToolParam(description = "Include property details for each node (default: false)", required = false) Boolean includeProperties,
+            @ToolParam(description = "List of property names to include (e.g., ['text', 'value']). Only used when includeProperties=true. Omit to get all properties.", required = false) List<String> propertyFilter,
+            @ToolParam(description = "Include transform properties (opacity, scale, rotate) when they differ from defaults (default: false)", required = false) Boolean includeTransforms) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         if (stageId != null) params.put("stageId", stageId);
         if (depth != null) params.put("depth", depth);
         if (includeProperties != null) params.put("includeProperties", includeProperties);
+        if (propertyFilter != null) params.put("propertyFilter", propertyFilter);
+        if (includeTransforms != null) params.put("includeTransforms", includeTransforms);
 
         return sendAgentCommand(sessionId,
                 new AgentCommand(AgentCommand.CommandType.GET_SCENEGRAPH, params));
     }
 
-    @Tool(description = "Get detailed information about a specific node including all its properties, children summary, bounds, style classes, and more. Use the nodeId obtained from getScenegraph.")
+    @Tool(description = "Get detailed information about a specific node including all its properties, children summary, bounds, style classes, and more. Use the nodeId obtained from getScenegraph. Optionally filter properties with propertyFilter.")
     public Map<String, Object> getNodeDetails(
             @ToolParam(description = "Session ID") String sessionId,
-            @ToolParam(description = "Node ID (identityHashCode of the JavaFX Node)") int nodeId) {
+            @ToolParam(description = "Node ID (identityHashCode of the JavaFX Node)") int nodeId,
+            @ToolParam(description = "List of property names to include (e.g., ['text', 'value']). Omit to get all properties.", required = false) List<String> propertyFilter) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("nodeId", nodeId);
+        if (propertyFilter != null) params.put("propertyFilter", propertyFilter);
 
         return sendAgentCommand(sessionId,
                 new AgentCommand(AgentCommand.CommandType.GET_NODE_DETAILS, params));
