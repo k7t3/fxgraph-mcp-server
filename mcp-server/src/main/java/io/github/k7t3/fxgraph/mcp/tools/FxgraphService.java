@@ -162,7 +162,7 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
 
-    @Tool(description = "Click a JavaFX node by nodeId using JavaFX Robot for real input simulation.")
+    @Tool(description = "Click a JavaFX node by nodeId using JavaFX Event System for simulated input.")
     public Map<String, Object> clickNode(
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Node ID") int nodeId) {
@@ -186,7 +186,7 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.REQUEST_FOCUS, params));
     }
 
-    @Tool(description = "Type a key into a JavaFX node using JavaFX Robot. If nodeId is omitted, the currently focused node is used.")
+    @Tool(description = "Type a key into a JavaFX node using JavaFX Event System. If nodeId is omitted, the currently focused node is used.")
     public Map<String, Object> typeKey(
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Key text or key code name (e.g. 'a', 'ENTER')") String key,

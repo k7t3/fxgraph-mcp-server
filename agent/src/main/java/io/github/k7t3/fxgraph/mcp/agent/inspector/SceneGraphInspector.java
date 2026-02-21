@@ -14,10 +14,13 @@ import javafx.scene.SnapshotParameters;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.image.WritablePixelFormat;
-import javafx.scene.input.KeyCode;
+
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.control.ButtonBase;
+import javafx.event.ActionEvent;
 import javafx.scene.paint.Color;
-import javafx.scene.robot.Robot;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import javafx.stage.Stage;
@@ -39,15 +42,11 @@ public class SceneGraphInspector {
 
     private static final String SPACE_CHAR = " ";
 
-    private final ObjectMapper mapper;
-
     /** Tracks highlighted overlay nodes so they can be removed. */
     private Node currentHighlight;
     private Parent currentHighlightParent;
-    private Robot robot;
 
     public SceneGraphInspector(ObjectMapper mapper) {
-        this.mapper = mapper;
     }
 
     // =============================================
@@ -405,14 +404,45 @@ public class SceneGraphInspector {
         Node node = findNodeById(nodeId);
         if (node == null) return "Node not found: " + nodeId;
 
-        Bounds bounds = node.localToScreen(node.getBoundsInLocal());
-        if (bounds == null) return "Node is not visible on screen: " + nodeId;
+        Window window = node.getScene() != null ? node.getScene().getWindow() : null;
+        if (window != null) {
+            window.requestFocus();
+        }
 
-        double x = bounds.getMinX() + (bounds.getWidth() / 2.0);
-        double y = bounds.getMinY() + (bounds.getHeight() / 2.0);
-        Robot fxRobot = getRobot();
-        fxRobot.mouseMove(x, y);
-        fxRobot.mouseClick(MouseButton.PRIMARY);
+        if (node instanceof ButtonBase buttonBase) {
+            ActionEvent actionEvent = new ActionEvent(ActionEvent.ACTION, buttonBase);
+            buttonBase.fireEvent(actionEvent);
+            return null;
+        }
+
+        Bounds bounds = node.getBoundsInLocal();
+        if (bounds == null || bounds.getWidth() == 0 || bounds.getHeight() == 0) {
+            return "Node is not visible or has zero size: " + nodeId;
+        }
+
+        double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
+        double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
+
+        javafx.geometry.Point2D screenCoords = node.localToScreen(localX, localY);
+        double screenX = screenCoords.getX();
+        double screenY = screenCoords.getY();
+
+        MouseEvent clickEvent = new MouseEvent(
+            MouseEvent.MOUSE_CLICKED,
+            localX, localY,
+            screenX, screenY,
+            MouseButton.PRIMARY,
+            1,
+            false, false, false, false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            null
+        );
+        node.fireEvent(clickEvent);
         return null;
     }
 
@@ -430,10 +460,15 @@ public class SceneGraphInspector {
         if (target == null) return nodeId != null ? "Node not found: " + nodeId : "No focused node found";
 
         target.requestFocus();
-        Robot fxRobot = getRobot();
-        KeyCode code = resolveKeyCode(key);
-        if (code == null || code == KeyCode.UNDEFINED) return "Unsupported key: " + key;
-        fxRobot.keyType(code);
+
+        KeyEvent keyTyped = new KeyEvent(
+            KeyEvent.KEY_TYPED,
+            "",
+            "",
+            null,
+            false, false, false, false
+        );
+        target.fireEvent(keyTyped);
         return null;
     }
 
@@ -495,19 +530,6 @@ public class SceneGraphInspector {
         } catch (Exception e) {
             throw new RuntimeException("Failed to encode screenshot", e);
         }
-    }
-
-    private KeyCode resolveKeyCode(String key) {
-        String uppercaseKey = key.toUpperCase(Locale.ROOT);
-        if (SPACE_CHAR.equals(key)) return KeyCode.SPACE;
-        return KeyCode.getKeyCode(uppercaseKey);
-    }
-
-    private Robot getRobot() {
-        if (robot == null) {
-            robot = new Robot();
-        }
-        return robot;
     }
 
     private Node findFocusedNode() {

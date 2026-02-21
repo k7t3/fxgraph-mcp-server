@@ -9,7 +9,7 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 - シーングラフ構造の取得と分析
 - ノードプロパティの取得と変更
 - ノードの選択とハイライト
-- ノードのクリック・フォーカス要求・キー入力（JavaFX Robot）
+- ノードのクリック・フォーカス要求・キー入力（JavaFXイベントシステム）
 - ノード/シーングラフのスクリーンショット取得
 
 ## アーキテクチャ
@@ -324,7 +324,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 指定したノードにクリックイベントを送信します。
 
-**説明**: Click a JavaFX node by nodeId using JavaFX Robot for real input simulation.
+**説明**: Click a JavaFX node by nodeId using JavaFX Event System for simulated input. The click event is fired directly on the target node.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -368,7 +368,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 キー入力イベントを送信します。
 
-**説明**: Type a key into a JavaFX node using JavaFX Robot. If nodeId is omitted, the currently focused node is used.
+**説明**: Type a key into a JavaFX node using JavaFX Event System. If nodeId is omitted, the currently focused node is used.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
