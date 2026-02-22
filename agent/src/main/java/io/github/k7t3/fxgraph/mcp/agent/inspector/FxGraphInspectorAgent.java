@@ -62,7 +62,7 @@ public class FxGraphInspectorAgent {
 
     private static void runServer() {
         ObjectMapper mapper = new ObjectMapper();
-        SceneGraphInspector inspector = new SceneGraphInspector(mapper);
+        SceneGraphInspector inspector = new SceneGraphInspector();
 
         while (running) {
             try (Socket client = serverSocket.accept()) {

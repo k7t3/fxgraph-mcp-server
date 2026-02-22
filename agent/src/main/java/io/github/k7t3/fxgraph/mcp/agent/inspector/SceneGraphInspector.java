@@ -1,6 +1,5 @@
 package io.github.k7t3.fxgraph.mcp.agent.inspector;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import javafx.application.Platform;
 import javafx.beans.value.ObservableValue;
@@ -46,7 +45,7 @@ public class SceneGraphInspector {
     private Node currentHighlight;
     private Parent currentHighlightParent;
 
-    public SceneGraphInspector(ObjectMapper mapper) {
+    public SceneGraphInspector() {
     }
 
     // =============================================
