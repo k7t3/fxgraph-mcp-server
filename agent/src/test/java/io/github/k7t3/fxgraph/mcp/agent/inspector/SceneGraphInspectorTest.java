@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -480,14 +482,19 @@ class SceneGraphInspectorTest {
         runOnFxThread(() -> root.getChildren().setAll(rect));
 
         int nodeId = System.identityHashCode(rect);
-        AgentResponse response = inspector.takeScreenshot(Map.of("nodeId", nodeId));
+        Path output = tempPngPath("node");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "nodeId", nodeId,
+                "savePath", output.toString()
+        ));
 
         assertTrue(response.isSuccess());
         Map<String, Object> data = castMap(response.getData());
         assertEquals("image/png", data.get("mimeType"));
         assertEquals("node", data.get("targetType"));
         assertEquals(String.valueOf(nodeId), data.get("targetId"));
-        assertTrue(((String) data.get("imageBase64")).length() > 0);
+        assertEquals(output.toAbsolutePath().toString(), data.get("savedPath"));
+        assertTrue(Files.exists(output));
         assertTrue(((Number) data.get("width")).intValue() > 0);
         assertTrue(((Number) data.get("height")).intValue() > 0);
     }
@@ -497,19 +504,29 @@ class SceneGraphInspectorTest {
         SceneGraphInspector inspector = createInspector();
         String sid = stageId(stage);
 
-        AgentResponse response = inspector.takeScreenshot(Map.of("stageId", sid));
+        Path output = tempPngPath("stage");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "stageId", sid,
+                "savePath", output.toString()
+        ));
 
         assertTrue(response.isSuccess());
         Map<String, Object> data = castMap(response.getData());
         assertEquals("image/png", data.get("mimeType"));
         assertEquals("scenegraph", data.get("targetType"));
         assertEquals(sid, data.get("targetId"));
+        assertEquals(output.toAbsolutePath().toString(), data.get("savedPath"));
+        assertTrue(Files.exists(output));
     }
 
     @Test
     void takeScreenshot_returnsErrorForMissingNode() {
         SceneGraphInspector inspector = createInspector();
-        AgentResponse response = inspector.takeScreenshot(Map.of("nodeId", 999999));
+        Path output = tempPngPath("missing-node");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "nodeId", 999999,
+                "savePath", output.toString()
+        ));
 
         assertFalse(response.isSuccess());
         assertEquals("Node not found: 999999", response.getError());
@@ -518,10 +535,27 @@ class SceneGraphInspectorTest {
     @Test
     void takeScreenshot_returnsErrorForMissingStage() {
         SceneGraphInspector inspector = createInspector();
-        AgentResponse response = inspector.takeScreenshot(Map.of("stageId", "missing"));
+        Path output = tempPngPath("missing-stage");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "stageId", "missing",
+                "savePath", output.toString()
+        ));
 
         assertFalse(response.isSuccess());
         assertEquals("Stage not found", response.getError());
+    }
+
+    @Test
+    void takeScreenshot_returnsErrorWhenSavePathMissing() {
+        SceneGraphInspector inspector = createInspector();
+        Rectangle rect = new Rectangle(40, 30);
+        runOnFxThread(() -> root.getChildren().setAll(rect));
+        int nodeId = System.identityHashCode(rect);
+
+        AgentResponse response = inspector.takeScreenshot(Map.of("nodeId", nodeId));
+
+        assertFalse(response.isSuccess());
+        assertEquals("savePath is required", response.getError());
     }
 
     private SceneGraphInspector createInspector() {
@@ -554,6 +588,15 @@ class SceneGraphInspectorTest {
 
     private String stageId(Stage stage) {
         return String.valueOf(System.identityHashCode(stage));
+    }
+
+    private Path tempPngPath(String suffix) {
+        try {
+            Path dir = Files.createTempDirectory("fxgraph-test-");
+            return dir.resolve("screenshot-" + suffix + ".png");
+        } catch (Exception e) {
+            throw new AssertionError("Failed to create temp file", e);
+        }
     }
 
     private void runOnFxThread(Runnable task) {

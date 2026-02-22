@@ -27,8 +27,11 @@ import javafx.stage.Window;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -385,8 +388,12 @@ public class SceneGraphInspector {
         try {
             Integer nodeId = params != null && params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
             String stageId = params != null ? (String) params.get("stageId") : null;
+            String savePath = params != null ? (String) params.get("savePath") : null;
+            if (savePath == null || savePath.isBlank()) {
+                return AgentResponse.error("savePath is required");
+            }
 
-            Map<String, Object> screenshot = runOnFxThread(() -> doTakeScreenshot(nodeId, stageId));
+            Map<String, Object> screenshot = runOnFxThread(() -> doTakeScreenshot(nodeId, stageId, savePath));
             if (screenshot == null) {
                 if (nodeId != null) {
                     return AgentResponse.error("Node not found: " + nodeId);
@@ -471,7 +478,7 @@ public class SceneGraphInspector {
         return null;
     }
 
-    private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId) {
+    private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId, String savePath) {
         WritableImage image;
         String targetType;
         String targetId;
@@ -490,9 +497,11 @@ public class SceneGraphInspector {
             targetId = String.valueOf(System.identityHashCode(stage));
         }
 
+        String savedPath = savePng(image, Paths.get(savePath));
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("mimeType", "image/png");
-        result.put("imageBase64", toPngBase64(image));
+        result.put("savedPath", savedPath);
         result.put("width", (int) image.getWidth());
         result.put("height", (int) image.getHeight());
         result.put("targetType", targetType);
@@ -513,7 +522,7 @@ public class SceneGraphInspector {
         return null;
     }
 
-    private String toPngBase64(WritableImage image) {
+    private String savePng(WritableImage image, Path outputPath) {
         try {
             int width = (int) image.getWidth();
             int height = (int) image.getHeight();
@@ -523,11 +532,18 @@ public class SceneGraphInspector {
             reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), argb, 0, width);
             buffered.setRGB(0, 0, width, height, argb, 0, width);
 
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            ImageIO.write(buffered, "png", out);
-            return Base64.getEncoder().encodeToString(out.toByteArray());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to encode screenshot", e);
+            Path parent = outputPath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+
+            if (!ImageIO.write(buffered, "png", outputPath.toFile())) {
+                throw new IOException("No PNG writer available");
+            }
+
+            return outputPath.toAbsolutePath().toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write screenshot: " + e.getMessage(), e);
         }
     }
 

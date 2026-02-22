@@ -391,7 +391,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 指定したノード、またはシーングラフ全体のスクリーンショットを取得します。
 
-**説明**: Take a screenshot of a specific node or the whole scene graph. Returns PNG as Base64.
+**説明**: Take a screenshot of a specific node or the whole scene graph. Saves PNG to the specified path.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -399,13 +399,14 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 | sessionId | string | はい | Session ID |
 | nodeId | integer | いいえ | Target node ID (optional; if omitted, captures full scene graph) |
 | stageId | string | いいえ | Stage ID for full scene graph capture (optional) |
+| savePath | string | はい | Path to save the PNG screenshot |
 
 **出力例**:
 ```json
 {
   "success": true,
   "mimeType": "image/png",
-  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "savedPath": "/tmp/fxgraph/screenshot.png",
   "width": 800,
   "height": 600,
   "targetType": "scenegraph",

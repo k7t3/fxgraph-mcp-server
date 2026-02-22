@@ -358,32 +358,34 @@ class FxgraphServiceTest {
     void takeScreenshotWithNodeIdSendsCorrectParams() throws Exception {
         JavaFxAgent agent = mock(JavaFxAgent.class);
         when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("imageBase64", "abc")));
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/a.png")));
         sessionManager.register("session-1", agent);
 
-        service.takeScreenshot("session-1", 88, null);
+        service.takeScreenshot("session-1", 88, null, "/tmp/a.png");
 
         var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
         verify(agent).sendCommand(captor.capture());
         assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
         assertEquals(88, captor.getValue().getParams().get("nodeId"));
         assertFalse(captor.getValue().getParams().containsKey("stageId"));
+        assertEquals("/tmp/a.png", captor.getValue().getParams().get("savePath"));
     }
 
     @Test
     void takeScreenshotScenegraphWithStageIdSendsCorrectParams() throws Exception {
         JavaFxAgent agent = mock(JavaFxAgent.class);
         when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("imageBase64", "abc")));
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/b.png")));
         sessionManager.register("session-1", agent);
 
-        service.takeScreenshot("session-1", null, "stage-1");
+        service.takeScreenshot("session-1", null, "stage-1", "/tmp/b.png");
 
         var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
         verify(agent).sendCommand(captor.capture());
         assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
         assertEquals("stage-1", captor.getValue().getParams().get("stageId"));
         assertFalse(captor.getValue().getParams().containsKey("nodeId"));
+        assertEquals("/tmp/b.png", captor.getValue().getParams().get("savePath"));
     }
 
     // ===== Agent communication error handling =====

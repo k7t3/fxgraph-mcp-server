@@ -200,15 +200,17 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.TYPE_KEY, params));
     }
 
-    @Tool(description = "Take a screenshot of a specific node or the whole scene graph. Returns PNG as Base64.")
+    @Tool(description = "Take a screenshot of a specific node or the whole scene graph. Saves PNG to the specified path.")
     public Map<String, Object> takeScreenshot(
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Target node ID (optional; if omitted, captures full scene graph)", required = false) Integer nodeId,
-            @ToolParam(description = "Stage ID for full scene graph capture (optional)", required = false) String stageId) {
+            @ToolParam(description = "Stage ID for full scene graph capture (optional)", required = false) String stageId,
+            @ToolParam(description = "Path to save the PNG screenshot") String savePath) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         if (nodeId != null) params.put("nodeId", nodeId);
         if (stageId != null) params.put("stageId", stageId);
+        params.put("savePath", savePath);
 
         return sendAgentCommand(sessionId,
                 new AgentCommand(AgentCommand.CommandType.TAKE_SCREENSHOT, params));
