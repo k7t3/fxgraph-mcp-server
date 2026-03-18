@@ -93,4 +93,24 @@ class SessionManagerTest {
 
         assertSame(agent2, sessionManager.get("session-1"));
     }
+
+    @Test
+    void findSessionIdByPidReturnsSessionIdForKnownPid() {
+        JavaFxAgent agent = new JavaFxAgent("12345");
+        sessionManager.register("session-1", agent);
+
+        assertEquals("session-1", sessionManager.findSessionIdByPid("12345"));
+    }
+
+    @Test
+    void findSessionIdByPidReturnsNullForUnknownPid() {
+        sessionManager.register("session-1", new JavaFxAgent("111"));
+
+        assertNull(sessionManager.findSessionIdByPid("99999"));
+    }
+
+    @Test
+    void findSessionIdByPidReturnsNullWhenNoSessions() {
+        assertNull(sessionManager.findSessionIdByPid("12345"));
+    }
 }

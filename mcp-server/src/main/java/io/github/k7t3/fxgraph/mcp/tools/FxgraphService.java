@@ -28,7 +28,7 @@ public class FxgraphService {
     // Discovery & Connection
     // ===================================================
 
-    @Tool(description = "Discover running Java processes. Returns a list of JVM processes with their PIDs and main classes. Processes that are likely JavaFX applications are marked with isJavaFX=true.")
+    @Tool(description = "Discover running JavaFX applications. Returns a list of JVM processes that are identified as JavaFX applications, with their PIDs and main classes.")
     public Map<String, Object> discoverApplications() {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
@@ -42,11 +42,21 @@ public class FxgraphService {
         return result;
     }
 
-    @Tool(description = "Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. Returns a sessionId to use with other tools.")
+    @Tool(description = "Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. If the application is already connected, the existing session is returned. Returns a sessionId to use with other tools.")
     public Map<String, Object> connectApplication(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
+            // Return existing session if the PID is already connected
+            String existingSessionId = sessionManager.findSessionIdByPid(String.valueOf(pid));
+            if (existingSessionId != null) {
+                JavaFxAgent existingAgent = sessionManager.get(existingSessionId);
+                result.put("success", true);
+                result.put("sessionId", existingSessionId);
+                result.put("agentPort", existingAgent.getAgentPort());
+                return result;
+            }
+
             JavaFxAgent agent = new JavaFxAgent(String.valueOf(pid));
             agent.connect();
 
