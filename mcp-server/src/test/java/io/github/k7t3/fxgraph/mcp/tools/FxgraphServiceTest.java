@@ -139,7 +139,7 @@ class FxgraphServiceTest {
 
     @Test
     void getScenegraphWithInvalidSession() {
-        Map<String, Object> result = service.getScenegraph("invalid", null, null, null, null, null);
+        Map<String, Object> result = service.getScenegraph("invalid", null, null, null, null, null, null);
         assertFalse((boolean) result.get("success"));
     }
 
@@ -149,16 +149,16 @@ class FxgraphServiceTest {
         when(agent.isConnected()).thenReturn(true);
         Map<String, Object> scenegraphData = Map.of(
                 "stages", List.of(),
-                "rootNodes", List.of(),
-                "totalNodeCount", 0
+                "rootNodes", List.of()
         );
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.success(scenegraphData));
         sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.getScenegraph("session-1", null, 3, false, null, false);
+        Map<String, Object> result = service.getScenegraph("session-1", null, 3, null, false, null, false);
         assertTrue((boolean) result.get("success"));
-        assertTrue(result.containsKey("totalNodeCount"));
+        // totalNodeCount は廃止済み
+        assertFalse(result.containsKey("totalNodeCount"));
     }
 
     @Test
@@ -169,7 +169,7 @@ class FxgraphServiceTest {
                 .thenReturn(AgentResponse.success(Map.of("stages", List.of(), "rootNodes", List.of())));
         sessionManager.register("session-1", agent);
 
-        service.getScenegraph("session-1", "stage-123", 5, true, List.of("text", "value"), false);
+        service.getScenegraph("session-1", "stage-123", 5, true, true, List.of("text", "value"), false);
 
         // Verify the command was sent with correct params
         var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
@@ -178,6 +178,7 @@ class FxgraphServiceTest {
         assertEquals(AgentCommand.CommandType.GET_SCENEGRAPH, cmd.getCommand());
         assertEquals("stage-123", cmd.getParams().get("stageId"));
         assertEquals(5, cmd.getParams().get("depth"));
+        assertEquals(true, cmd.getParams().get("includeBounds"));
         assertEquals(true, cmd.getParams().get("includeProperties"));
         assertEquals(List.of("text", "value"), cmd.getParams().get("propertyFilter"));
     }

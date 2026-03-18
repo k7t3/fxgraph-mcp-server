@@ -128,9 +128,9 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ### 5. getScenegraph
 
-接続済みのJavaFXアプリケーションからシーングラフ構造を取得します。デフォルトでは軽量なツリー構造のみを返します。
+接続済みのJavaFXアプリケーションからシーングラフ構造を取得します。デフォルトではノードタイプ・ID・子ノードのみを含むコンパクトなツリー構造を返します。
 
-**説明**: Get the scene graph tree structure from a connected JavaFX application. Returns a lightweight hierarchical tree by default. Use depth to limit tree depth, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.
+**説明**: Get the scene graph tree structure from a connected JavaFX application. Returns a compact hierarchical tree by default. Use depth to limit tree depth, includeBounds to include node bounding boxes, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -138,11 +138,12 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 | sessionId | string | はい | Session ID |
 | stageId | string | いいえ | Stage ID to inspect (omit to get all stages) |
 | depth | integer | いいえ | Maximum depth to traverse (default: unlimited) |
+| includeBounds | boolean | いいえ | Include bounding box (x,y,w,h) for each node (default: false) |
 | includeProperties | boolean | いいえ | Include property details for each node (default: false) |
 | propertyFilter | array<string> | いいえ | List of property names to include (e.g., ["text", "value"]). Only used when includeProperties=true. Omit to get all properties. |
 | includeTransforms | boolean | いいえ | Include transform properties (opacity, scale, rotate) when they differ from defaults (default: false) |
 
-**出力例（デフォルト - 軽量モード）**:
+**出力例（デフォルト - コンパクトモード）**:
 ```json
 {
   "success": true,
@@ -150,11 +151,6 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
     {
       "stageId": "123456789",
       "title": "Main Window",
-      "width": 800,
-      "height": 600,
-      "x": 100,
-      "y": 100,
-      "focused": true,
       "rootNodeId": 987654321
     }
   ],
@@ -163,20 +159,35 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
       "nodeId": 987654321,
       "id": "root",
       "type": "VBox",
-      "visible": true,
       "styleClass": ["root"],
-      "bounds": { "x": 0, "y": 0, "w": 800, "h": 600 },
       "children": [
         {
           "nodeId": 123456,
-          "type": "Button",
-          "visible": true,
-          "bounds": { "x": 10, "y": 10, "w": 100, "h": 30 }
+          "type": "Button"
         }
       ]
     }
-  ],
-  "totalNodeCount": 5
+  ]
+}
+```
+
+> **注意**: `visible: false` のノードのみ `visible` フィールドが含まれます。CSS IDが未設定のノードは `id` フィールドを持ちません。ウィンドウの位置・サイズが必要な場合は `getStages` を使用してください。
+
+**出力例（includeBounds=true）**:
+```json
+{
+  "nodeId": 987654321,
+  "id": "root",
+  "type": "VBox",
+  "styleClass": ["root"],
+  "bounds": { "x": 0, "y": 0, "w": 800, "h": 600 },
+  "children": [
+    {
+      "nodeId": 123456,
+      "type": "Button",
+      "bounds": { "x": 10, "y": 10, "w": 100, "h": 30 }
+    }
+  ]
 }
 ```
 
@@ -184,11 +195,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 ```json
 {
   "nodeId": 123456,
-  "id": null,
   "type": "Button",
-  "visible": true,
-  "styleClass": ["button"],
-  "bounds": { "x": 10, "y": 10, "w": 100, "h": 30 },
   "properties": [
     {
       "name": "text",
@@ -197,8 +204,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
       "writable": true,
       "category": "content"
     }
-  ],
-  "children": []
+  ]
 }
 ```
 
@@ -449,45 +455,57 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ### SVNode（Scenegraph Node）
 
-**軽量モード（デフォルト）:**
+**デフォルト（コンパクトモード）:**
 ```json
 {
   "nodeId": 987654321,
-  "id": "node-id",
-  "type": "Button",
-  "visible": true,
-  "styleClass": ["button"],
-  "bounds": { "x": 10, "y": 10, "w": 100, "h": 30 },
-  "children": []
+  "type": "Button"
 }
 ```
 
-**includeTransforms=true の場合:**
+> フィールドの省略ルール:
+> - `id` (CSS ID): 設定されている場合のみ出力
+> - `visible`: `false` の場合のみ出力（デフォルトは `true`）
+> - `styleClass`: 空でない場合のみ出力
+> - `bounds`: `includeBounds=true` の場合のみ出力
+> - `children`: 子ノードがある場合のみ出力
+
+**CSS IDが設定されたノード:**
 ```json
 {
   "nodeId": 987654321,
-  "id": "node-id",
+  "id": "myButton",
   "type": "Button",
-  "visible": true,
-  "styleClass": ["button"],
-  "bounds": { "x": 10, "y": 10, "w": 100, "h": 30 },
+  "styleClass": ["button", "primary"]
+}
+```
+
+**非表示ノード:**
+```json
+{
+  "nodeId": 987654321,
+  "type": "Label",
+  "visible": false
+}
+```
+
+**includeBounds=true の場合:**
+```json
+{
+  "nodeId": 987654321,
+  "type": "Button",
+  "bounds": { "x": 10, "y": 10, "w": 100, "h": 30 }
+}
+```
+
+**includeTransforms=true の場合（デフォルト値と異なる場合のみ）:**
+```json
+{
+  "nodeId": 987654321,
+  "type": "Button",
   "opacity": 0.5,
   "scaleX": 1.2,
-  "rotate": 45.0,
-  "children": []
-}
-```
-
-**includeProperties=true の場合:**
-```json
-{
-  "nodeId": 987654321,
-  "id": "node-id",
-  "type": "Button",
-  "visible": true,
-  "bounds": { "x": 10, "y": 10, "w": 100, "h": 30 },
-  "properties": [...],
-  "children": []
+  "rotate": 45.0
 }
 ```
 
@@ -547,7 +565,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 4. **シーングラフを取得**:
    ```
    getScenegraph(sessionId: "xxx", depth: 3)
-   → { "stages": [...], "rootNodes": [...], "totalNodeCount": 42 }
+   → { "stages": [{"stageId":"123","title":"Main Window","rootNodeId":987654321}], "rootNodes": [...] }
    ```
 
 5. **特定ノードの詳細を取得**:

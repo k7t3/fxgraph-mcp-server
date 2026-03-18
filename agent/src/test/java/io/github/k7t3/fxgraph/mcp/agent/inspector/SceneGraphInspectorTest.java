@@ -103,7 +103,7 @@ class SceneGraphInspectorTest {
     }
 
     @Test
-    void getScenegraph_respectsDepthAndCountsNodes() {
+    void getScenegraph_respectsDepth() {
         SceneGraphInspector inspector = createInspector();
 
         Rectangle rectA = new Rectangle(10, 10);
@@ -128,7 +128,8 @@ class SceneGraphInspectorTest {
         Map<String, Object> rootNode2 = roots2.get(0);
         List<Map<String, Object>> children2 = castList(rootNode2.get("children"));
         assertEquals(2, children2.size());
-        assertEquals(4, ((Number) data2.get("totalNodeCount")).intValue());
+        // totalNodeCount は廃止済み
+        assertFalse(data2.containsKey("totalNodeCount"));
     }
 
     @Test

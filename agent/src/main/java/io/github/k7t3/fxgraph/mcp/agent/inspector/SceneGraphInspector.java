@@ -99,11 +99,12 @@ public class SceneGraphInspector {
                     ? ((Number) params.get("depth")).intValue() : Integer.MAX_VALUE;
             boolean includeProperties = params != null && Boolean.TRUE.equals(params.get("includeProperties"));
             boolean includeTransforms = params != null && Boolean.TRUE.equals(params.get("includeTransforms"));
+            boolean includeBounds = params != null && Boolean.TRUE.equals(params.get("includeBounds"));
             List<String> propertyFilter = params != null && params.get("propertyFilter") != null
                     ? (List<String>) params.get("propertyFilter") : null;
 
             Map<String, Object> result = runOnFxThread(() ->
-                    collectScenegraph(stageId, maxDepth, includeProperties, propertyFilter, includeTransforms));
+                    collectScenegraph(stageId, maxDepth, includeProperties, propertyFilter, includeTransforms, includeBounds));
             return AgentResponse.success(result);
         } catch (Exception e) {
             return AgentResponse.error("Failed to get scenegraph: " + e.getMessage());
@@ -111,11 +112,11 @@ public class SceneGraphInspector {
     }
 
     private Map<String, Object> collectScenegraph(String stageId, int maxDepth, boolean includeProperties,
-                                                   List<String> propertyFilter, boolean includeTransforms) {
+                                                   List<String> propertyFilter, boolean includeTransforms,
+                                                   boolean includeBounds) {
         Map<String, Object> result = new LinkedHashMap<>();
         List<Map<String, Object>> stages = new ArrayList<>();
         List<Map<String, Object>> rootNodes = new ArrayList<>();
-        int totalNodeCount = 0;
 
         ObservableList<Window> windows = Window.getWindows();
         for (Window window : windows) {
@@ -126,25 +127,20 @@ public class SceneGraphInspector {
             String sid = String.valueOf(System.identityHashCode(stage));
             if (stageId != null && !stageId.equals(sid)) continue;
 
+            // Minimal stage info: position/size are available via getStages
             Map<String, Object> stageInfo = new LinkedHashMap<>();
             stageInfo.put("stageId", sid);
             stageInfo.put("title", stage.getTitle());
-            stageInfo.put("width", stage.getWidth());
-            stageInfo.put("height", stage.getHeight());
-            stageInfo.put("x", stage.getX());
-            stageInfo.put("y", stage.getY());
-            stageInfo.put("focused", stage.isFocused());
             stageInfo.put("rootNodeId", System.identityHashCode(scene.getRoot()));
             stages.add(stageInfo);
 
-            Map<String, Object> rootNode = serializeNodeLightweight(scene.getRoot(), 0, maxDepth, includeProperties, propertyFilter, includeTransforms, null);
+            Map<String, Object> rootNode = serializeNodeLightweight(scene.getRoot(), 0, maxDepth,
+                    includeProperties, propertyFilter, includeTransforms, includeBounds, null);
             rootNodes.add(rootNode);
-            totalNodeCount += countNodes(scene.getRoot());
         }
 
         result.put("stages", stages);
         result.put("rootNodes", rootNodes);
-        result.put("totalNodeCount", totalNodeCount);
         return result;
     }
 
@@ -178,8 +174,8 @@ public class SceneGraphInspector {
 
         Map<String, Object> result = new LinkedHashMap<>();
 
-        // Node basic info (with full depth=1 for immediate children summary)
-        Map<String, Object> nodeInfo = serializeNodeLightweight(node, 0, 1, true, propertyFilter, true, null);
+        // Node basic info (with full depth=1 for immediate children summary; always include bounds for detail view)
+        Map<String, Object> nodeInfo = serializeNodeLightweight(node, 0, 1, true, propertyFilter, true, true, null);
         result.put("node", nodeInfo);
 
         // Detailed properties (filtered if specified)
@@ -575,12 +571,23 @@ public class SceneGraphInspector {
 
     private Map<String, Object> serializeNodeLightweight(Node node, int currentDepth, int maxDepth,
                                                            boolean includeProperties, List<String> propertyFilter,
-                                                           boolean includeTransforms, Integer parentId) {
+                                                           boolean includeTransforms, boolean includeBounds,
+                                                           Integer parentId) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("nodeId", System.identityHashCode(node));
-        result.put("id", node.getId());
+
+        // CSS id: only emit when set
+        String fxId = node.getId();
+        if (fxId != null) {
+            result.put("id", fxId);
+        }
+
         result.put("type", nodeClassName(node));
-        result.put("visible", node.isVisible());
+
+        // visible: only emit when false (default is true)
+        if (!node.isVisible()) {
+            result.put("visible", false);
+        }
 
         // Style classes (empty list filtered out)
         List<String> styleClasses = new ArrayList<>(node.getStyleClass());
@@ -588,13 +595,15 @@ public class SceneGraphInspector {
             result.put("styleClass", styleClasses);
         }
 
-        // Simplified bounds
-        Bounds bp = node.getBoundsInParent();
-        result.put("bounds", Map.of(
-                "x", Math.round(bp.getMinX()),
-                "y", Math.round(bp.getMinY()),
-                "w", Math.round(bp.getWidth()),
-                "h", Math.round(bp.getHeight())));
+        // Optional: bounds
+        if (includeBounds) {
+            Bounds bp = node.getBoundsInParent();
+            result.put("bounds", Map.of(
+                    "x", Math.round(bp.getMinX()),
+                    "y", Math.round(bp.getMinY()),
+                    "w", Math.round(bp.getWidth()),
+                    "h", Math.round(bp.getHeight())));
+        }
 
         // Optional: transforms
         if (includeTransforms) {
@@ -616,7 +625,7 @@ public class SceneGraphInspector {
             for (Node child : ChildrenGetter.getChildren(node)) {
                 if (isInspectorNode(child)) continue;
                 children.add(serializeNodeLightweight(child, currentDepth + 1, maxDepth,
-                        includeProperties, propertyFilter, includeTransforms, myId));
+                        includeProperties, propertyFilter, includeTransforms, includeBounds, myId));
             }
             if (!children.isEmpty()) {
                 result.put("children", children);
@@ -709,15 +718,6 @@ public class SceneGraphInspector {
             if (found != null) return found;
         }
         return null;
-    }
-
-    private int countNodes(Node node) {
-        if (isInspectorNode(node)) return 0;
-        int count = 1;
-        for (Node child : ChildrenGetter.getChildren(node)) {
-            count += countNodes(child);
-        }
-        return count;
     }
 
     private boolean isInspectorNode(Node node) {
