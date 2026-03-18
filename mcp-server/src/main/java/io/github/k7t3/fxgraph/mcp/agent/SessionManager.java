@@ -62,4 +62,17 @@ public class SessionManager {
     public java.util.Set<String> getActiveSessions() {
         return sessions.keySet();
     }
+
+    /**
+     * Find a session ID by the PID of the connected JavaFX application.
+     * Returns null if no session for the given PID exists.
+     */
+    public String findSessionIdByPid(String pid) {
+        for (Map.Entry<String, JavaFxAgent> entry : sessions.entrySet()) {
+            if (pid.equals(entry.getValue().getPid())) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
 }

@@ -34,6 +34,10 @@ public class JavaFxAgent {
         this.pid = pid;
     }
 
+    public String getPid() {
+        return pid;
+    }
+
     /**
      * Attach to the target JVM and inject the inspector agent.
      */
@@ -231,11 +235,14 @@ public class JavaFxAgent {
                     String agentPort = sysProps.getProperty("fxgraph.agent.port");
                     boolean alreadyConnected = agentPort != null;
 
+                    // Only return JavaFX applications
+                    if (!likelyJavaFx) continue;
+
                     JavaFxApplication app = new JavaFxApplication();
                     app.setPid(Integer.parseInt(vmd.id()));
                     app.setMainClass(mainClass != null ? mainClass.split(" ")[0] : "unknown");
                     app.setVmName(vmName);
-                    app.setJavaFX(likelyJavaFx);
+                    app.setJavaFX(true);
                     app.setConnected(alreadyConnected);
 
                     apps.add(app);

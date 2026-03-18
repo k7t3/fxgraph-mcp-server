@@ -20,13 +20,17 @@ MCPサーバーはJava Attach APIを使用して対象のJavaFX JVMにインス�
 MCP Client  <-->  MCP Server (STDIO)  <-->  Agent (TCP Socket)  <-->  JavaFX Scene Graph
 ```
 
+### トランスポートの制限
+
+このMCPサーバーはSTDIO（標準入出力）トランスポートのみをサポートします。STDIOトランスポートは1つのAIエージェントとの1対1通信を前提としているため、複数のAIエージェントから同時に利用することはできません。
+
 ## ツール一覧
 
 ### 1. discoverApplications
 
-実行中のJavaプロセスを検出します。
+実行中のJavaFXアプリケーションを検出します。
 
-**説明**: Discover running Java processes. Returns a list of JVM processes with their PIDs and main classes. Processes that are likely JavaFX applications are marked with isJavaFX=true.
+**説明**: Discover running JavaFX applications. Returns a list of JVM processes that are identified as JavaFX applications, with their PIDs and main classes.
 
 **入力パラメータ**: なし
 
@@ -50,9 +54,9 @@ MCP Client  <-->  MCP Server (STDIO)  <-->  Agent (TCP Socket)  <-->  JavaFX Sce
 
 ### 2. connectApplication
 
-PIDを指定してJavaFXアプリケーションに接続します。対象JVMにインスペクタエージェントを注入し、通信チャネルを確立します。
+PIDを指定してJavaFXアプリケーションに接続します。対象JVMにインスペクタエージェントを注入し、通信チャネルを確立します。すでに接続済みのPIDを指定した場合は既存のセッションを返します。
 
-**説明**: Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. Returns a sessionId to use with other tools.
+**説明**: Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. If the application is already connected, the existing session is returned. Returns a sessionId to use with other tools.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |

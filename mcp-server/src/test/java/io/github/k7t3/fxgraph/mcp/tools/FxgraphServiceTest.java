@@ -4,6 +4,7 @@ import io.github.k7t3.fxgraph.mcp.agent.JavaFxAgent;
 import io.github.k7t3.fxgraph.mcp.agent.SessionManager;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentCommand;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
+import io.github.k7t3.fxgraph.mcp.model.JavaFxApplication;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +42,22 @@ class FxgraphServiceTest {
         assertTrue(result.containsKey("success"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void discoverApplicationsReturnsOnlyJavaFxApplications() {
+        // discoverApplications() should only return JavaFX apps.
+        // All returned entries must have isJavaFX=true.
+        Map<String, Object> result = service.discoverApplications();
+        assertTrue((boolean) result.get("success"));
+
+        List<JavaFxApplication> apps = (List<JavaFxApplication>) result.get("applications");
+        assertNotNull(apps);
+        for (JavaFxApplication app : apps) {
+            assertTrue(app.isJavaFX(),
+                    "All discovered applications must be JavaFX applications, but found: " + app.getMainClass());
+        }
+    }
+
     // ===== connectApplication =====
 
     @Test
@@ -50,6 +67,25 @@ class FxgraphServiceTest {
         assertNotNull(result);
         assertFalse((boolean) result.get("success"));
         assertNotNull(result.get("error"));
+    }
+
+    @Test
+    void connectApplicationReturnsExistingSessionWhenAlreadyConnected() throws Exception {
+        // Register a mock agent for PID 12345
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.getPid()).thenReturn("12345");
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.getAgentPort()).thenReturn(54321);
+        sessionManager.register("existing-session", agent);
+
+        // Calling connectApplication with the same PID should return the existing session
+        Map<String, Object> result = service.connectApplication(12345);
+
+        assertTrue((boolean) result.get("success"));
+        assertEquals("existing-session", result.get("sessionId"));
+        assertEquals(54321, result.get("agentPort"));
+        // No new connection attempt should be made
+        verify(agent, never()).connect();
     }
 
     // ===== disconnectApplication =====
