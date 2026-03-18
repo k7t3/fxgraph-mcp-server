@@ -62,7 +62,7 @@ public class FxGraphInspectorAgent {
 
     private static void runServer() {
         ObjectMapper mapper = new ObjectMapper();
-        SceneGraphInspector inspector = new SceneGraphInspector(mapper);
+        SceneGraphInspector inspector = new SceneGraphInspector();
 
         while (running) {
             try (Socket client = serverSocket.accept()) {
@@ -120,6 +120,10 @@ public class FxGraphInspectorAgent {
             case GET_NODE_DETAILS -> inspector.getNodeDetails(command.getParams());
             case SET_PROPERTY -> inspector.setProperty(command.getParams());
             case SELECT_NODE -> inspector.selectNode(command.getParams());
+            case CLICK_NODE -> inspector.clickNode(command.getParams());
+            case REQUEST_FOCUS -> inspector.requestFocus(command.getParams());
+            case TYPE_KEY -> inspector.typeKey(command.getParams());
+            case TAKE_SCREENSHOT -> inspector.takeScreenshot(command.getParams());
             case SHUTDOWN -> {
                 shutdown();
                 yield null;

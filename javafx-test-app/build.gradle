@@ -1,0 +1,38 @@
+plugins {
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'io.github.k7t3'
+version = '1.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+}
+
+compileTestJava {
+    options.encoding = 'UTF-8'
+}
+
+javafx {
+    version = '22.0.1'
+    modules = [ 'javafx.controls', 'javafx.fxml' ]
+}
+
+application {
+    mainClass = 'io.github.k7t3.simplefx.Main'
+    applicationName = 'Simple JavaFX App'
+}
+
+dependencies {
+    implementation 'io.github.mkpaz:atlantafx-base:2.0.1'
+}

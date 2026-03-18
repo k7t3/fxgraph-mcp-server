@@ -22,7 +22,7 @@ MCP Client (AI) <--> MCP Server (STDIO) <--> Agent (TCP Socket) <--> JavaFX Scen
 ### プロジェクト構成
 
 ```
-fxgraph-mcp-server/          # ルートプロジェクト (MCPサーバー)
+fxgraph-mcp-server/          # ルートプロジェクト
 ├── agent/                    # エージェントサブプロジェクト
 │   └── src/main/java/
 │       └── .../agent/
@@ -33,15 +33,17 @@ fxgraph-mcp-server/          # ルートプロジェクト (MCPサーバー)
 │           └── protocol/     # JSON通信プロトコル (共有)
 │               ├── AgentCommand.java
 │               └── AgentResponse.java
-├── src/main/java/
-│   └── .../mcp/
-│       ├── agent/            # Attach API・セッション管理
-│       │   ├── JavaFxAgent.java      # JVM接続・エージェント注入
-│       │   └── SessionManager.java   # セッション管理
-│       ├── model/            # データモデル
-│       ├── server/           # Spring Bootエントリポイント
-│       └── tools/            # MCPツール定義
-│           └── FxgraphService.java   # 8つのMCPツール
+├── mcp-server/               # MCPサーバーサブプロジェクト
+│   └── src/main/java/
+│       └── .../mcp/
+│           ├── agent/            # Attach API・セッション管理
+│           │   ├── JavaFxAgent.java      # JVM接続・エージェント注入
+│           │   └── SessionManager.java   # セッション管理
+│           ├── model/            # データモデル
+│           ├── server/           # Spring Bootエントリポイント
+│           └── tools/            # MCPツール定義
+│               └── FxgraphService.java   # 8つのMCPツール
+├── javafx-test-app/          # テスト用JavaFXアプリ（将来実装）
 └── docs/
     └── tools-reference.md    # ツールリファレンス
 ```
@@ -56,9 +58,9 @@ fxgraph-mcp-server/          # ルートプロジェクト (MCPサーバー)
 ## ビルド
 
 ```bash
-./gradlew shadowJar
-# build/libs/fxgraph-mcp-server.jar  (MCPサーバー)
-# build/libs/fxgraph-agent.jar       (エージェント - 自動コピーされる)
+./gradlew :mcp-server:shadowJar
+# mcp-server/build/libs/fxgraph-mcp-server.jar  (MCPサーバー)
+# mcp-server/build/libs/fxgraph-agent.jar       (エージェント - 自動コピーされる)
 ```
 
 ## テスト

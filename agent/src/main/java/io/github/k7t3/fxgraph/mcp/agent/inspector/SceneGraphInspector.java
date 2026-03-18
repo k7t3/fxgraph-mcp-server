@@ -1,6 +1,5 @@
 package io.github.k7t3.fxgraph.mcp.agent.inspector;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import javafx.application.Platform;
 import javafx.beans.value.ObservableValue;
@@ -10,13 +9,29 @@ import javafx.geometry.Bounds;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.SnapshotParameters;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.WritableImage;
+import javafx.scene.image.WritablePixelFormat;
+
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.control.ButtonBase;
+import javafx.event.ActionEvent;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -27,14 +42,13 @@ import java.util.concurrent.TimeUnit;
  */
 public class SceneGraphInspector {
 
-    private final ObjectMapper mapper;
+    private static final String SPACE_CHAR = " ";
 
     /** Tracks highlighted overlay nodes so they can be removed. */
     private Node currentHighlight;
     private Parent currentHighlightParent;
 
-    public SceneGraphInspector(ObjectMapper mapper) {
-        this.mapper = mapper;
+    public SceneGraphInspector() {
     }
 
     // =============================================
@@ -77,26 +91,32 @@ public class SceneGraphInspector {
     // GET_SCENEGRAPH
     // =============================================
 
+    @SuppressWarnings("unchecked")
     public AgentResponse getScenegraph(Map<String, Object> params) {
         try {
             String stageId = params != null ? (String) params.get("stageId") : null;
             int maxDepth = params != null && params.get("depth") != null
                     ? ((Number) params.get("depth")).intValue() : Integer.MAX_VALUE;
             boolean includeProperties = params != null && Boolean.TRUE.equals(params.get("includeProperties"));
+            boolean includeTransforms = params != null && Boolean.TRUE.equals(params.get("includeTransforms"));
+            boolean includeBounds = params != null && Boolean.TRUE.equals(params.get("includeBounds"));
+            List<String> propertyFilter = params != null && params.get("propertyFilter") != null
+                    ? (List<String>) params.get("propertyFilter") : null;
 
             Map<String, Object> result = runOnFxThread(() ->
-                    collectScenegraph(stageId, maxDepth, includeProperties));
+                    collectScenegraph(stageId, maxDepth, includeProperties, propertyFilter, includeTransforms, includeBounds));
             return AgentResponse.success(result);
         } catch (Exception e) {
             return AgentResponse.error("Failed to get scenegraph: " + e.getMessage());
         }
     }
 
-    private Map<String, Object> collectScenegraph(String stageId, int maxDepth, boolean includeProperties) {
+    private Map<String, Object> collectScenegraph(String stageId, int maxDepth, boolean includeProperties,
+                                                   List<String> propertyFilter, boolean includeTransforms,
+                                                   boolean includeBounds) {
         Map<String, Object> result = new LinkedHashMap<>();
         List<Map<String, Object>> stages = new ArrayList<>();
         List<Map<String, Object>> rootNodes = new ArrayList<>();
-        int totalNodeCount = 0;
 
         ObservableList<Window> windows = Window.getWindows();
         for (Window window : windows) {
@@ -107,25 +127,20 @@ public class SceneGraphInspector {
             String sid = String.valueOf(System.identityHashCode(stage));
             if (stageId != null && !stageId.equals(sid)) continue;
 
+            // Minimal stage info: position/size are available via getStages
             Map<String, Object> stageInfo = new LinkedHashMap<>();
             stageInfo.put("stageId", sid);
             stageInfo.put("title", stage.getTitle());
-            stageInfo.put("width", stage.getWidth());
-            stageInfo.put("height", stage.getHeight());
-            stageInfo.put("x", stage.getX());
-            stageInfo.put("y", stage.getY());
-            stageInfo.put("focused", stage.isFocused());
             stageInfo.put("rootNodeId", System.identityHashCode(scene.getRoot()));
             stages.add(stageInfo);
 
-            Map<String, Object> rootNode = serializeNode(scene.getRoot(), 0, maxDepth, includeProperties, null);
+            Map<String, Object> rootNode = serializeNodeLightweight(scene.getRoot(), 0, maxDepth,
+                    includeProperties, propertyFilter, includeTransforms, includeBounds, null);
             rootNodes.add(rootNode);
-            totalNodeCount += countNodes(scene.getRoot());
         }
 
         result.put("stages", stages);
         result.put("rootNodes", rootNodes);
-        result.put("totalNodeCount", totalNodeCount);
         return result;
     }
 
@@ -133,14 +148,17 @@ public class SceneGraphInspector {
     // GET_NODE_DETAILS
     // =============================================
 
+    @SuppressWarnings("unchecked")
     public AgentResponse getNodeDetails(Map<String, Object> params) {
         try {
             if (params == null || params.get("nodeId") == null) {
                 return AgentResponse.error("nodeId is required");
             }
             int nodeId = ((Number) params.get("nodeId")).intValue();
+            List<String> propertyFilter = params.get("propertyFilter") != null
+                    ? (List<String>) params.get("propertyFilter") : null;
 
-            Map<String, Object> result = runOnFxThread(() -> collectNodeDetails(nodeId));
+            Map<String, Object> result = runOnFxThread(() -> collectNodeDetails(nodeId, propertyFilter));
             if (result == null) {
                 return AgentResponse.error("Node not found: " + nodeId);
             }
@@ -150,18 +168,18 @@ public class SceneGraphInspector {
         }
     }
 
-    private Map<String, Object> collectNodeDetails(int nodeId) {
+    private Map<String, Object> collectNodeDetails(int nodeId, List<String> propertyFilter) {
         Node node = findNodeById(nodeId);
         if (node == null) return null;
 
         Map<String, Object> result = new LinkedHashMap<>();
 
-        // Node basic info (with full depth=1 for immediate children summary)
-        Map<String, Object> nodeInfo = serializeNode(node, 0, 1, true, null);
+        // Node basic info (with full depth=1 for immediate children summary; always include bounds for detail view)
+        Map<String, Object> nodeInfo = serializeNodeLightweight(node, 0, 1, true, propertyFilter, true, true, null);
         result.put("node", nodeInfo);
 
-        // Detailed properties
-        List<Map<String, Object>> properties = extractProperties(node);
+        // Detailed properties (filtered if specified)
+        List<Map<String, Object>> properties = extractPropertiesFiltered(node, propertyFilter);
         result.put("properties", properties);
 
         // Children summary (just IDs and classes, no recursion)
@@ -170,7 +188,7 @@ public class SceneGraphInspector {
         for (Node child : children) {
             Map<String, Object> childInfo = new LinkedHashMap<>();
             childInfo.put("nodeId", System.identityHashCode(child));
-            childInfo.put("nodeClass", nodeClassName(child));
+            childInfo.put("type", nodeClassName(child));
             childInfo.put("id", child.getId());
             childInfo.put("visible", child.isVisible());
             childrenSummary.add(childInfo);
@@ -306,6 +324,235 @@ public class SceneGraphInspector {
         return true;
     }
 
+    // =============================================
+    // CLICK_NODE / REQUEST_FOCUS / TYPE_KEY / TAKE_SCREENSHOT
+    // =============================================
+
+    public AgentResponse clickNode(Map<String, Object> params) {
+        try {
+            if (params == null || params.get("nodeId") == null) {
+                return AgentResponse.error("nodeId is required");
+            }
+            int nodeId = ((Number) params.get("nodeId")).intValue();
+
+            String error = runOnFxThread(() -> doClickNode(nodeId));
+            if (error != null) {
+                return AgentResponse.error(error);
+            }
+            return AgentResponse.success(Map.of("clicked", true));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to click node: " + e.getMessage());
+        }
+    }
+
+    public AgentResponse requestFocus(Map<String, Object> params) {
+        try {
+            if (params == null || params.get("nodeId") == null) {
+                return AgentResponse.error("nodeId is required");
+            }
+            int nodeId = ((Number) params.get("nodeId")).intValue();
+
+            Boolean focused = runOnFxThread(() -> doRequestFocus(nodeId));
+            if (focused == null || !focused) {
+                return AgentResponse.error("Node not found: " + nodeId);
+            }
+            return AgentResponse.success(Map.of("focused", true));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to request focus: " + e.getMessage());
+        }
+    }
+
+    public AgentResponse typeKey(Map<String, Object> params) {
+        try {
+            if (params == null || params.get("key") == null) {
+                return AgentResponse.error("key is required");
+            }
+            String key = String.valueOf(params.get("key"));
+            Integer nodeId = params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
+
+            String error = runOnFxThread(() -> doTypeKey(nodeId, key));
+            if (error != null) {
+                return AgentResponse.error(error);
+            }
+            return AgentResponse.success(Map.of("typed", true));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to type key: " + e.getMessage());
+        }
+    }
+
+    public AgentResponse takeScreenshot(Map<String, Object> params) {
+        try {
+            Integer nodeId = params != null && params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
+            String stageId = params != null ? (String) params.get("stageId") : null;
+            String savePath = params != null ? (String) params.get("savePath") : null;
+            if (savePath == null || savePath.isBlank()) {
+                return AgentResponse.error("savePath is required");
+            }
+
+            Map<String, Object> screenshot = runOnFxThread(() -> doTakeScreenshot(nodeId, stageId, savePath));
+            if (screenshot == null) {
+                if (nodeId != null) {
+                    return AgentResponse.error("Node not found: " + nodeId);
+                }
+                return AgentResponse.error("Stage not found");
+            }
+            return AgentResponse.success(screenshot);
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to take screenshot: " + e.getMessage());
+        }
+    }
+
+    private String doClickNode(int nodeId) {
+        Node node = findNodeById(nodeId);
+        if (node == null) return "Node not found: " + nodeId;
+
+        Window window = node.getScene() != null ? node.getScene().getWindow() : null;
+        if (window != null) {
+            window.requestFocus();
+        }
+
+        if (node instanceof ButtonBase buttonBase) {
+            ActionEvent actionEvent = new ActionEvent(ActionEvent.ACTION, buttonBase);
+            buttonBase.fireEvent(actionEvent);
+            return null;
+        }
+
+        Bounds bounds = node.getBoundsInLocal();
+        if (bounds == null || bounds.getWidth() == 0 || bounds.getHeight() == 0) {
+            return "Node is not visible or has zero size: " + nodeId;
+        }
+
+        double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
+        double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
+
+        javafx.geometry.Point2D screenCoords = node.localToScreen(localX, localY);
+        double screenX = screenCoords.getX();
+        double screenY = screenCoords.getY();
+
+        MouseEvent clickEvent = new MouseEvent(
+            MouseEvent.MOUSE_CLICKED,
+            localX, localY,
+            screenX, screenY,
+            MouseButton.PRIMARY,
+            1,
+            false, false, false, false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            null
+        );
+        node.fireEvent(clickEvent);
+        return null;
+    }
+
+    private Boolean doRequestFocus(int nodeId) {
+        Node node = findNodeById(nodeId);
+        if (node == null) return false;
+        node.requestFocus();
+        return true;
+    }
+
+    private String doTypeKey(Integer nodeId, String key) {
+        if (key == null || key.isEmpty()) return "key is required";
+
+        Node target = nodeId != null ? findNodeById(nodeId) : findFocusedNode();
+        if (target == null) return nodeId != null ? "Node not found: " + nodeId : "No focused node found";
+
+        target.requestFocus();
+
+        KeyEvent keyTyped = new KeyEvent(
+            KeyEvent.KEY_TYPED,
+            "",
+            "",
+            null,
+            false, false, false, false
+        );
+        target.fireEvent(keyTyped);
+        return null;
+    }
+
+    private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId, String savePath) {
+        WritableImage image;
+        String targetType;
+        String targetId;
+
+        if (nodeId != null) {
+            Node node = findNodeById(nodeId);
+            if (node == null) return null;
+            image = node.snapshot(new SnapshotParameters(), null);
+            targetType = "node";
+            targetId = String.valueOf(nodeId);
+        } else {
+            Stage stage = findStage(stageId);
+            if (stage == null || stage.getScene() == null) return null;
+            image = stage.getScene().snapshot(null);
+            targetType = "scenegraph";
+            targetId = String.valueOf(System.identityHashCode(stage));
+        }
+
+        String savedPath = savePng(image, Paths.get(savePath));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("mimeType", "image/png");
+        result.put("savedPath", savedPath);
+        result.put("width", (int) image.getWidth());
+        result.put("height", (int) image.getHeight());
+        result.put("targetType", targetType);
+        result.put("targetId", targetId);
+        return result;
+    }
+
+    private Stage findStage(String stageId) {
+        ObservableList<Window> windows = Window.getWindows();
+        for (Window window : windows) {
+            if (!(window instanceof Stage stage) || stage.getScene() == null || stage.getScene().getRoot() == null) {
+                continue;
+            }
+            if (stageId == null || stageId.equals(String.valueOf(System.identityHashCode(stage)))) {
+                return stage;
+            }
+        }
+        return null;
+    }
+
+    private String savePng(WritableImage image, Path outputPath) {
+        try {
+            int width = (int) image.getWidth();
+            int height = (int) image.getHeight();
+            BufferedImage buffered = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            PixelReader reader = image.getPixelReader();
+            int[] argb = new int[width * height];
+            reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), argb, 0, width);
+            buffered.setRGB(0, 0, width, height, argb, 0, width);
+
+            Path parent = outputPath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+
+            if (!ImageIO.write(buffered, "png", outputPath.toFile())) {
+                throw new IOException("No PNG writer available");
+            }
+
+            return outputPath.toAbsolutePath().toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write screenshot: " + e.getMessage(), e);
+        }
+    }
+
+    private Node findFocusedNode() {
+        ObservableList<Window> windows = Window.getWindows();
+        for (Window window : windows) {
+            if (window.getScene() == null) continue;
+            Node focusOwner = window.getScene().getFocusOwner();
+            if (focusOwner != null) return focusOwner;
+        }
+        return null;
+    }
+
     private void removeHighlight() {
         if (currentHighlight != null && currentHighlightParent != null) {
             try {
@@ -322,50 +569,53 @@ public class SceneGraphInspector {
     // Node Serialization
     // =============================================
 
-    private Map<String, Object> serializeNode(Node node, int currentDepth, int maxDepth,
-                                               boolean includeProperties, Integer parentId) {
+    private Map<String, Object> serializeNodeLightweight(Node node, int currentDepth, int maxDepth,
+                                                           boolean includeProperties, List<String> propertyFilter,
+                                                           boolean includeTransforms, boolean includeBounds,
+                                                           Integer parentId) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("nodeId", System.identityHashCode(node));
-        result.put("id", node.getId());
-        result.put("nodeClass", nodeClassName(node));
-        result.put("nodeClassName", node.getClass().getName());
-        if (parentId != null) {
-            result.put("parentId", parentId);
+
+        // CSS id: only emit when set
+        String fxId = node.getId();
+        if (fxId != null) {
+            result.put("id", fxId);
         }
-        result.put("visible", node.isVisible());
-        result.put("mouseTransparent", node.isMouseTransparent());
-        result.put("focused", node.isFocused());
 
-        // Bounds
-        Bounds lb = node.getLayoutBounds();
-        result.put("layoutBounds", Map.of(
-                "minX", lb.getMinX(), "minY", lb.getMinY(),
-                "width", lb.getWidth(), "height", lb.getHeight()));
+        result.put("type", nodeClassName(node));
 
-        Bounds bp = node.getBoundsInParent();
-        result.put("boundsInParent", Map.of(
-                "minX", bp.getMinX(), "minY", bp.getMinY(),
-                "width", bp.getWidth(), "height", bp.getHeight()));
+        // visible: only emit when false (default is true)
+        if (!node.isVisible()) {
+            result.put("visible", false);
+        }
 
-        result.put("layoutX", node.getLayoutX());
-        result.put("layoutY", node.getLayoutY());
+        // Style classes (empty list filtered out)
+        List<String> styleClasses = new ArrayList<>(node.getStyleClass());
+        if (!styleClasses.isEmpty()) {
+            result.put("styleClass", styleClasses);
+        }
 
-        // Style
-        result.put("style", node.getStyle());
-        result.put("styleClass", new ArrayList<>(node.getStyleClass()));
-        result.put("nodeType", "REAL_NODE");
+        // Optional: bounds
+        if (includeBounds) {
+            Bounds bp = node.getBoundsInParent();
+            result.put("bounds", Map.of(
+                    "x", Math.round(bp.getMinX()),
+                    "y", Math.round(bp.getMinY()),
+                    "w", Math.round(bp.getWidth()),
+                    "h", Math.round(bp.getHeight())));
+        }
 
-        // Opacity, transforms
-        result.put("opacity", node.getOpacity());
-        result.put("scaleX", node.getScaleX());
-        result.put("scaleY", node.getScaleY());
-        result.put("rotate", node.getRotate());
-        result.put("translateX", node.getTranslateX());
-        result.put("translateY", node.getTranslateY());
-        result.put("managed", node.isManaged());
+        // Optional: transforms
+        if (includeTransforms) {
+            if (node.getOpacity() != 1.0) result.put("opacity", node.getOpacity());
+            if (node.getScaleX() != 1.0) result.put("scaleX", node.getScaleX());
+            if (node.getScaleY() != 1.0) result.put("scaleY", node.getScaleY());
+            if (node.getRotate() != 0.0) result.put("rotate", node.getRotate());
+        }
 
+        // Optional: properties (filtered if specified)
         if (includeProperties) {
-            result.put("properties", extractProperties(node));
+            result.put("properties", extractPropertiesFiltered(node, propertyFilter));
         }
 
         // Children
@@ -374,10 +624,12 @@ public class SceneGraphInspector {
             int myId = System.identityHashCode(node);
             for (Node child : ChildrenGetter.getChildren(node)) {
                 if (isInspectorNode(child)) continue;
-                children.add(serializeNode(child, currentDepth + 1, maxDepth,
-                        includeProperties, myId));
+                children.add(serializeNodeLightweight(child, currentDepth + 1, maxDepth,
+                        includeProperties, propertyFilter, includeTransforms, includeBounds, myId));
             }
-            result.put("children", children);
+            if (!children.isEmpty()) {
+                result.put("children", children);
+            }
         }
 
         return result;
@@ -386,6 +638,18 @@ public class SceneGraphInspector {
     // =============================================
     // Property Extraction
     // =============================================
+
+    private List<Map<String, Object>> extractPropertiesFiltered(Node node, List<String> propertyFilter) {
+        List<Map<String, Object>> allProperties = extractProperties(node);
+        if (propertyFilter == null || propertyFilter.isEmpty()) {
+            return allProperties;
+        }
+        // Filter to only include requested properties
+        Set<String> filterSet = new HashSet<>(propertyFilter);
+        return allProperties.stream()
+                .filter(p -> filterSet.contains(p.get("name")))
+                .toList();
+    }
 
     private List<Map<String, Object>> extractProperties(Node node) {
         List<Map<String, Object>> properties = new ArrayList<>();
@@ -454,15 +718,6 @@ public class SceneGraphInspector {
             if (found != null) return found;
         }
         return null;
-    }
-
-    private int countNodes(Node node) {
-        if (isInspectorNode(node)) return 0;
-        int count = 1;
-        for (Node child : ChildrenGetter.getChildren(node)) {
-            count += countNodes(child);
-        }
-        return count;
     }
 
     private boolean isInspectorNode(Node node) {

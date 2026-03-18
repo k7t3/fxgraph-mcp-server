@@ -1,0 +1,165 @@
+.root {
+    -fx-background-color: #2e3440;
+}
+
+.todo-view {
+    -fx-background-color: #2e3440;
+}
+
+.input-box {
+    -fx-background-color: #3b4252;
+    -fx-border-color: #4c566a;
+    -fx-border-width: 0 0 1 0;
+}
+
+.title-field {
+    -fx-background-color: #434c5e;
+    -fx-text-fill: #eceff4;
+    -fx-prompt-text-fill: #6c7a8e;
+    -fx-background-radius: 6;
+    -fx-padding: 10 14;
+    -fx-font-size: 14px;
+}
+
+.title-field:focused {
+    -fx-background-color: #4c566a;
+}
+
+.description-field {
+    -fx-background-color: #434c5e;
+    -fx-text-fill: #eceff4;
+    -fx-prompt-text-fill: #6c7a8e;
+    -fx-background-radius: 6;
+    -fx-padding: 10 14;
+    -fx-font-size: 14px;
+}
+
+.description-field:focused {
+    -fx-background-color: #4c566a;
+}
+
+.add-button {
+    -fx-background-color: #88c0d0;
+    -fx-text-fill: #2e3440;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 6;
+    -fx-padding: 10 20;
+    -fx-cursor: hand;
+}
+
+.add-button:hover {
+    -fx-background-color: #8fbcbb;
+}
+
+.add-button:pressed {
+    -fx-background-color: #81a1c1;
+}
+
+.todo-list {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.todo-list .list-cell {
+    -fx-background-color: #3b4252;
+    -fx-background-radius: 8;
+    -fx-padding: 0;
+    -fx-margin: 4 8;
+}
+
+.todo-list .list-cell:odd {
+    -fx-background-color: #3b4252;
+}
+
+.todo-list .list-cell:selected {
+    -fx-background-color: #434c5e;
+}
+
+.todo-list .list-cell:filled {
+    -fx-padding: 0;
+}
+
+.todo-item {
+    -fx-background-color: #3b4252;
+    -fx-background-radius: 8;
+}
+
+.todo-checkbox {
+    -fx-cursor: hand;
+}
+
+.todo-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #eceff4;
+}
+
+.todo-title.completed {
+    -fx-strikethrough: true;
+    -fx-text-fill: #7b88a1;
+}
+
+.todo-description {
+    -fx-font-size: 12px;
+    -fx-text-fill: #a3be8c;
+}
+
+.content-box.completed {
+    -fx-opacity: 0.6;
+}
+
+.delete-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #d08770;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+}
+
+.delete-button:hover {
+    -fx-background-color: #434c5e;
+    -fx-text-fill: #bf616a;
+    -fx-background-radius: 4;
+}
+
+.footer-box {
+    -fx-background-color: #3b4252;
+    -fx-border-color: #4c566a;
+    -fx-border-width: 1 0 0 0;
+}
+
+.filter-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #b48ead;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+    -fx-background-radius: 4;
+    -fx-padding: 6 12;
+}
+
+.filter-button:hover {
+    -fx-background-color: #434c5e;
+}
+
+.filter-button:selected {
+    -fx-background-color: #88c0d0;
+    -fx-text-fill: #2e3440;
+}
+
+.status-label {
+    -fx-text-fill: #a3be8c;
+    -fx-font-size: 12px;
+}
+
+.clear-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #bf616a;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+    -fx-background-radius: 4;
+    -fx-padding: 6 12;
+}
+
+.clear-button:hover {
+    -fx-background-color: #434c5e;
+}
