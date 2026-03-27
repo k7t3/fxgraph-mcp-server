@@ -55,8 +55,8 @@ public class JavaFxAgent {
         try {
             vm = VirtualMachine.attach(pid);
 
-            String portStr = readAgentPort(vm);
-            if (portStr == null) {
+            String portString = readAgentPort(vm);
+            if (portString == null) {
                 // Find the agent JAR. It should be bundled alongside the MCP server JAR.
                 String agentJarPath = findAgentJar();
 
@@ -67,19 +67,19 @@ public class JavaFxAgent {
                 // The agent sets it via System.setProperty() in the target JVM,
                 // so we read it from system properties.
                 // We may need to retry as the agent starts asynchronously.
-                for (int i = 0; i < 10 && portStr == null; i++) {
-                    portStr = readAgentPort(vm);
-                    if (portStr == null) {
+                for (int i = 0; i < 10 && portString == null; i++) {
+                    portString = readAgentPort(vm);
+                    if (portString == null) {
                         Thread.sleep(500);
                     }
                 }
             }
 
-            if (portStr == null) {
+            if (portString == null) {
                 throw new Exception("Agent started but port not found. The agent may not be loaded correctly.");
             }
 
-            agentPort = Integer.parseInt(portStr);
+            agentPort = Integer.parseInt(portString);
 
             // Connect to the agent
             socket = new Socket("127.0.0.1", agentPort);

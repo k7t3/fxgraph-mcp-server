@@ -81,7 +81,7 @@ class FxgraphCliIntegrationTest {
                 .redirectErrorStream(true)
                 .start();
 
-        boolean finished = process.waitFor(Duration.ofSeconds(30).toSeconds(), TimeUnit.SECONDS);
+        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
         assertTrue(finished, "CLI process should finish within timeout");
 
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();

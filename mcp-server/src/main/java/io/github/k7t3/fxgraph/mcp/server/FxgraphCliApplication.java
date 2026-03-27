@@ -247,7 +247,7 @@ public final class FxgraphCliApplication {
 
         private String requiredValue(String name) {
             String value = optionalValue(name);
-            if (value == null || value.isBlank()) {
+            if (value == null) {
                 throw new IllegalArgumentException("Missing required option --" + name);
             }
             return value;
@@ -259,12 +259,12 @@ public final class FxgraphCliApplication {
         }
 
         private Integer requiredInteger(String name) {
-            return Integer.valueOf(requiredValue(name));
+            return parseInteger(name, requiredValue(name));
         }
 
         private Integer optionalInteger(String name) {
             String value = optionalValue(name);
-            return value == null ? null : Integer.valueOf(value);
+            return value == null ? null : parseInteger(name, value);
         }
 
         private Boolean optionalBoolean(String name) {
@@ -282,6 +282,14 @@ public final class FxgraphCliApplication {
                     .map(String::trim)
                     .filter(value -> !value.isEmpty())
                     .toList();
+        }
+
+        private Integer parseInteger(String name, String value) {
+            try {
+                return Integer.valueOf(value);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid integer value for option --" + name + ": " + value, e);
+            }
         }
     }
 }
