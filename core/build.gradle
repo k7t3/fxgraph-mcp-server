@@ -1,0 +1,23 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'io.github.k7t3'
+version = '1.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Agent subproject - provides protocol classes (AgentCommand, AgentResponse)
+    api project(':agent')
+
+    // Jackson for JSON serialization
+    api 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+}
