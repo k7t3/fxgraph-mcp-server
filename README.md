@@ -28,7 +28,7 @@ FXGraph MCP Serverは、実行中のJavaFXアプリケーションに接続し�
 ```
 
 ビルド成果物：
-- `mcp-server/build/libs/fxgraph-mcp-server.jar` - MCPサーバー本体 (~21MB)
+- `mcp-server/build/libs/mcp-server.jar` - MCPサーバー本体 (~21MB)
 - `mcp-server/build/libs/fxgraph-agent.jar` - エージェントJAR (~2MB、対象JVMに注入)
 
 ### テスト
@@ -39,11 +39,25 @@ FXGraph MCP Serverは、実行中のJavaFXアプリケーションに接続し�
 
 ### 実行
 
+#### MCPサーバーとして起動
+
 MCPサーバーはSTDIOトランスポートで動作します。通常はMCPクライアント（Claude Desktop等）から起動されます：
 
 ```bash
-java -jar mcp-server/build/libs/fxgraph-mcp-server.jar
+java -jar mcp-server/build/libs/mcp-server.jar
 ```
+
+#### CLIとして起動
+
+同じJARはCLIとしても利用できます。CLIはコンパクトなJSONを標準出力に返すため、パイプライン処理やAgent Skillsとの組み合わせに向いています。
+
+```bash
+java -jar mcp-server/build/libs/mcp-server.jar cli --help
+java -jar mcp-server/build/libs/mcp-server.jar cli discoverApplications
+java -jar mcp-server/build/libs/mcp-server.jar cli getScenegraph --pid 12345 --depth 3 --includeBounds
+```
+
+Agent Skills向けの手順は [`skills/fxgraph-cli/SKILL.md`](skills/fxgraph-cli/SKILL.md) を参照してください。
 
 ### MCPクライアントへの登録
 
@@ -60,7 +74,7 @@ java -jar mcp-server/build/libs/fxgraph-mcp-server.jar
       "command": "java",
       "args": [
         "-jar",
-        "/path/to/fxgraph-mcp-server.jar"
+        "/path/to/mcp-server.jar"
       ]
     }
   }
@@ -78,7 +92,7 @@ java -jar mcp-server/build/libs/fxgraph-mcp-server.jar
       "name": "fxgraph",
       "type": "stdio",
       "command": "java",
-      "args": ["-jar", "/path/to/fxgraph-mcp-server.jar"]
+      "args": ["-jar", "/path/to/mcp-server.jar"]
     }
   ]
 }
@@ -89,7 +103,7 @@ java -jar mcp-server/build/libs/fxgraph-mcp-server.jar
 `.claude/CLAUDE.md` またはプロンプトで：
 
 ```
-/mcp add fxgraph java -jar /path/to/fxgraph-mcp-server.jar
+/mcp add fxgraph java -jar /path/to/mcp-server.jar
 ```
 
 #### カスタムMCPクライアント
@@ -100,7 +114,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const transport = new StdioClientTransport({
   command: 'java',
-  args: ['-jar', '/path/to/fxgraph-mcp-server.jar']
+  args: ['-jar', '/path/to/mcp-server.jar']
 });
 
 const client = new Client({ name: 'my-client', version: '1.0.0' });
@@ -127,7 +141,7 @@ await client.connect(transport);
 
 エージェントは対象JVMにロードされるため、依存関係を最小化しています：
 - **fxgraph-agent.jar** (~2MB) - Jackson + インスペクタクラスのみ
-- **fxgraph-mcp-server.jar** (~21MB) - Spring Boot含む完全なMCPサーバー
+- **mcp-server.jar** (~21MB) - Spring Boot含む完全なMCPサーバー
 
 これにより、クラスローダーの競合リスクを最小化しています。
 
@@ -190,7 +204,7 @@ selectNode(sessionId: "xxx", nodeId: 789, showBounds: true)
 | 項目 | 値 |
 |------|-----|
 | **MCP Server Type** | SYNC |
-| **Transport** | STDIO |
+| **Transport** | STDIO / CLI |
 | **Java Version** | 21+ |
 | **Spring Boot** | 4.0.2 |
 | **Spring AI MCP** | 1.1.2 |

@@ -32,9 +32,23 @@ public class SessionManager {
      * Remove a session and disconnect the agent.
      */
     public void remove(String sessionId) {
+        remove(sessionId, true);
+    }
+
+    /**
+     * Remove a session and optionally shut down the injected agent.
+     *
+     * @param sessionId session identifier to remove
+     * @param shutdownAgent whether the remote agent should be shut down
+     */
+    public void remove(String sessionId, boolean shutdownAgent) {
         JavaFxAgent agent = sessions.remove(sessionId);
         if (agent != null) {
-            agent.disconnect();
+            if (shutdownAgent) {
+                agent.disconnect();
+            } else {
+                agent.closeConnection();
+            }
         }
     }
 

@@ -20,6 +20,11 @@ public class FxgraphService {
 
     private final SessionManager sessionManager;
 
+    /**
+     * Creates the tool service with the shared session manager.
+     *
+     * @param sessionManager session registry for connected JavaFX applications
+     */
     public FxgraphService(SessionManager sessionManager) {
         this.sessionManager = sessionManager;
     }

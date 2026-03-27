@@ -14,7 +14,7 @@ java {
 }
 
 application {
-    mainClass = 'io.github.k7t3.fxgraph.mcp.server.McpServerApplication'
+    mainClass = 'io.github.k7t3.fxgraph.mcp.server.FxgraphApplication'
 }
 
 repositories {
@@ -60,7 +60,7 @@ shadowJar {
     mergeServiceFiles()
     manifest {
         attributes(
-            'Main-Class': 'io.github.k7t3.fxgraph.mcp.server.McpServerApplication',
+            'Main-Class': 'io.github.k7t3.fxgraph.mcp.server.FxgraphApplication',
         )
     }
 }

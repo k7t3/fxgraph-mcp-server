@@ -30,10 +30,20 @@ public class JavaFxAgent {
     private BufferedReader reader;
     private OutputStream writer;
 
+    /**
+     * Creates a client for the JavaFX process identified by the given PID.
+     *
+     * @param pid target JVM process identifier
+     */
     public JavaFxAgent(String pid) {
         this.pid = pid;
     }
 
+    /**
+     * Returns the target JVM process identifier.
+     *
+     * @return target process identifier
+     */
     public String getPid() {
         return pid;
     }
@@ -45,25 +55,23 @@ public class JavaFxAgent {
         try {
             vm = VirtualMachine.attach(pid);
 
-            // Find the agent JAR. It should be bundled alongside the MCP server JAR.
-            String agentJarPath = findAgentJar();
+            String portStr = readAgentPort(vm);
+            if (portStr == null) {
+                // Find the agent JAR. It should be bundled alongside the MCP server JAR.
+                String agentJarPath = findAgentJar();
 
-            // Load the agent into the target JVM
-            vm.loadAgent(agentJarPath);
+                // Load the agent into the target JVM
+                vm.loadAgent(agentJarPath);
 
-            // Get the port assigned by the agent.
-            // The agent sets it via System.setProperty() in the target JVM,
-            // so we read it from system properties.
-            // We may need to retry as the agent starts asynchronously.
-            String portStr = null;
-            for (int i = 0; i < 10 && portStr == null; i++) {
-                portStr = vm.getSystemProperties().getProperty("fxgraph.agent.port");
-                if (portStr == null) {
-                    // Also try agent properties as fallback
-                    portStr = vm.getAgentProperties().getProperty("fxgraph.agent.port");
-                }
-                if (portStr == null) {
-                    Thread.sleep(500);
+                // Get the port assigned by the agent.
+                // The agent sets it via System.setProperty() in the target JVM,
+                // so we read it from system properties.
+                // We may need to retry as the agent starts asynchronously.
+                for (int i = 0; i < 10 && portStr == null; i++) {
+                    portStr = readAgentPort(vm);
+                    if (portStr == null) {
+                        Thread.sleep(500);
+                    }
                 }
             }
 
@@ -96,13 +104,69 @@ public class JavaFxAgent {
      * Disconnect from the target JVM.
      */
     public void disconnect() {
+        releaseResources(true);
+    }
+
+    /**
+     * Closes the local connection without shutting down the injected agent.
+     */
+    public void closeConnection() {
+        releaseResources(false);
+    }
+
+    /**
+     * Returns whether the client currently has an open connection to the target JVM.
+     *
+     * @return {@code true} when connected, otherwise {@code false}
+     */
+    public boolean isConnected() {
+        return connected;
+    }
+
+    /**
+     * Returns the TCP port used by the injected agent.
+     *
+     * @return agent port, or {@code -1} when disconnected
+     */
+    public int getAgentPort() {
+        return agentPort;
+    }
+
+    /**
+     * Finds the port of an already-running FXGraph agent in the target JVM.
+     *
+     * @param pid target JVM process identifier
+     * @return agent port, or {@code null} when the agent is not running
+     */
+    public static Integer findRunningAgentPort(String pid) {
+        VirtualMachine attachedVm = null;
+        try {
+            attachedVm = VirtualMachine.attach(pid);
+            String port = readAgentPort(attachedVm);
+            return port == null ? null : Integer.valueOf(port);
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (attachedVm != null) {
+                try {
+                    attachedVm.detach();
+                } catch (IOException e) {
+                    // Ignore
+                }
+            }
+        }
+    }
+
+    private void releaseResources(boolean shutdownAgent) {
         connected = false;
         agentPort = -1;
 
         if (socket != null) {
             try {
-                // Send shutdown command
-                sendCommandNoResponse(new AgentCommand(AgentCommand.CommandType.SHUTDOWN));
+                if (shutdownAgent) {
+                    // Send shutdown command
+                    sendCommandNoResponse(new AgentCommand(AgentCommand.CommandType.SHUTDOWN));
+                }
             } catch (Exception e) {
                 // Ignore
             }
@@ -126,12 +190,12 @@ public class JavaFxAgent {
         }
     }
 
-    public boolean isConnected() {
-        return connected;
-    }
-
-    public int getAgentPort() {
-        return agentPort;
+    private static String readAgentPort(VirtualMachine virtualMachine) throws IOException {
+        String port = virtualMachine.getSystemProperties().getProperty("fxgraph.agent.port");
+        if (port == null) {
+            port = virtualMachine.getAgentProperties().getProperty("fxgraph.agent.port");
+        }
+        return port;
     }
 
     /**

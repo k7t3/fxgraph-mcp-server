@@ -20,9 +20,12 @@ MCPサーバーはJava Attach APIを使用して対象のJavaFX JVMにインス�
 MCP Client  <-->  MCP Server (STDIO)  <-->  Agent (TCP Socket)  <-->  JavaFX Scene Graph
 ```
 
-### トランスポートの制限
+### トランスポート
 
-このMCPサーバーはSTDIO（標準入出力）トランスポートのみをサポートします。STDIOトランスポートは1つのAIエージェントとの1対1通信を前提としているため、複数のAIエージェントから同時に利用することはできません。
+- **MCPサーバー**: STDIO（標準入出力）トランスポートをサポートします。
+- **CLI**: 同じ機能をPIDベースのCLIとしても利用できます。CLIは各コマンドがJSONを返すため、Agent Skillsやパイプライン処理に向いています。
+
+STDIOトランスポートは1つのAIエージェントとの1対1通信を前提としているため、複数のAIエージェントから同時に利用する場合はCLI併用が適しています。
 
 ## ツール一覧
 
@@ -638,7 +641,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 ## 技術仕様
 
 - **MCP Server Type**: SYNC
-- **Transport**: STDIO
+- **Transport**: STDIO / CLI
 - **Server Name**: fxgraph-mcp-server
 - **Version**: 1.0.0
 - **Java Version**: 21+

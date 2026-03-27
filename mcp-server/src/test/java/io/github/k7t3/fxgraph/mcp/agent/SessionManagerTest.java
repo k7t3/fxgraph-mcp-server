@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Tests for SessionManager.
@@ -58,6 +59,18 @@ class SessionManagerTest {
     @Test
     void removeNonexistentSessionDoesNotThrow() {
         assertDoesNotThrow(() -> sessionManager.remove("nonexistent"));
+    }
+
+    @Test
+    void removeWithoutShutdownOnlyClosesLocalConnection() {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        sessionManager.register("session-1", agent);
+
+        sessionManager.remove("session-1", false);
+
+        verify(agent).closeConnection();
+        verify(agent, never()).disconnect();
+        assertNull(sessionManager.get("session-1"));
     }
 
     @Test
