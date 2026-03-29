@@ -1,1 +1,41 @@
-// Root project configuration for multi-project build
+plugins {
+    alias(libs.plugins.shadow)                       apply false
+    alias(libs.plugins.spring.boot)                  apply false
+    alias(libs.plugins.spring.dependency.management) apply false
+    alias(libs.plugins.javafx)                       apply false
+}
+
+allprojects {
+    group   = 'io.github.k7t3'
+    version = '1.0-SNAPSHOT'
+}
+
+subprojects {
+    repositories {
+        mavenCentral()
+    }
+
+    plugins.withId('java') {
+        java {
+            sourceCompatibility = JavaVersion.VERSION_21
+            targetCompatibility = JavaVersion.VERSION_21
+        }
+
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = 'UTF-8'
+        }
+
+        dependencies {
+            testImplementation platform(libs.junit.bom)
+            testImplementation libs.junit.jupiter
+            testRuntimeOnly    libs.junit.platform.launcher
+        }
+
+        test {
+            useJUnitPlatform()
+            testLogging {
+                events "passed", "skipped", "failed"
+            }
+        }
+    }
+}

@@ -2,30 +2,7 @@ plugins {
     id 'java-library'
 }
 
-group = 'io.github.k7t3'
-version = '1.0-SNAPSHOT'
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     // Jackson for JSON protocol serialization
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
-
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-test {
-    useJUnitPlatform()
-    testLogging {
-        events "passed", "skipped", "failed"
-    }
+    implementation libs.jackson.databind
 }

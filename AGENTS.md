@@ -34,9 +34,6 @@ fxgraph-mcp-server/          # ルートプロジェクト
 │   └── src/main/java/
 │       └── .../agent/
 │           ├── inspector/    # インスペクタエージェント
-│           │   ├── FxGraphInspectorAgent.java  # Agentエントリポイント
-│           │   ├── SceneGraphInspector.java     # シーングラフ操作
-│           │   └── ChildrenGetter.java          # 子ノード取得ユーティリティ
 │           └── protocol/     # JSON通信プロトコル (agent独立コピー)
 ├── core/                     # 共有ロジック (Spring不使用)
 │   └── src/main/java/
@@ -47,9 +44,6 @@ fxgraph-mcp-server/          # ルートプロジェクト
 ├── cli/                      # CLIサブプロジェクト (fxgraph-cli.jar)
 │   └── src/main/java/
 │       └── .../cli/
-│           ├── FxgraphApplication.java   # main エントリポイント
-│           ├── CliCommandDispatcher.java # コマンドルーティング・実装
-│           └── CliJsonOutput.java        # JSON stdout 出力
 ├── mcp-server/               # MCPサーバーサブプロジェクト (Spring Boot)
 │   └── src/main/java/
 │       └── .../mcp/

@@ -1,10 +1,7 @@
 plugins {
     id 'java-library'
-    id 'com.gradleup.shadow' version '9.3.1'
+    alias(libs.plugins.shadow)
 }
-
-group = 'io.github.k7t3'
-version = '1.0-SNAPSHOT'
 
 // Determine JavaFX platform classifier based on OS and architecture
 ext.javafxPlatform = {
@@ -20,33 +17,21 @@ ext.javafxPlatform = {
     return 'linux' // fallback
 }()
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     // Jackson for JSON protocol serialization
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+    implementation libs.jackson.databind
 
     // JavaFX - compileOnly since inspector runs inside target JVM which already has JavaFX
-    compileOnly "org.openjfx:javafx-controls:21:${javafxPlatform}"
-    compileOnly "org.openjfx:javafx-graphics:21:${javafxPlatform}"
-    compileOnly "org.openjfx:javafx-base:21:${javafxPlatform}"
+    compileOnly "org.openjfx:javafx-controls:${libs.versions.javafx.get()}:${javafxPlatform}"
+    compileOnly "org.openjfx:javafx-graphics:${libs.versions.javafx.get()}:${javafxPlatform}"
+    compileOnly "org.openjfx:javafx-base:${libs.versions.javafx.get()}:${javafxPlatform}"
 
     // Test dependencies
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.testfx:testfx-junit5:4.0.18'
     testImplementation 'org.testfx:openjfx-monocle:21.0.2'
-    testImplementation "org.openjfx:javafx-controls:21:${javafxPlatform}"
-    testImplementation "org.openjfx:javafx-graphics:21:${javafxPlatform}"
-    testImplementation "org.openjfx:javafx-base:21:${javafxPlatform}"
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation "org.openjfx:javafx-controls:${libs.versions.javafx.get()}:${javafxPlatform}"
+    testImplementation "org.openjfx:javafx-graphics:${libs.versions.javafx.get()}:${javafxPlatform}"
+    testImplementation "org.openjfx:javafx-base:${libs.versions.javafx.get()}:${javafxPlatform}"
 }
 
 shadowJar {
@@ -79,7 +64,6 @@ jar {
 build.dependsOn shadowJar
 
 test {
-    useJUnitPlatform()
     // Always run TestFX in headless mode (Monocle) regardless of CI environment
     systemProperty "testfx.robot", "glass"
     systemProperty "testfx.headless", "true"
@@ -89,7 +73,6 @@ test {
     systemProperty "glass.platform", "Monocle"
     systemProperty "monocle.platform", "Headless"
     testLogging {
-        events "passed", "skipped", "failed"
         showStandardStreams = true
     }
 }

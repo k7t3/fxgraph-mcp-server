@@ -1,32 +1,20 @@
 plugins {
     id 'application'
-    id 'com.gradleup.shadow' version '9.3.1'
-    id 'org.springframework.boot' version '4.0.2'
-    id 'io.spring.dependency-management' version '1.1.4'
-}
-
-group = 'io.github.k7t3'
-version = '1.0-SNAPSHOT'
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    alias(libs.plugins.shadow)
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
 }
 
 application {
     mainClass = 'io.github.k7t3.fxgraph.mcp.server.McpServerApplication'
 }
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     // Spring AI MCP Server Starter
-    implementation 'org.springframework.ai:spring-ai-starter-mcp-server:1.1.2'
+    implementation libs.spring.ai.mcp.server
 
     // Spring Boot
-    implementation 'org.springframework.boot:spring-boot-starter:4.0.2'
+    implementation 'org.springframework.boot:spring-boot-starter'
 
     // Spring Web (provides StandardServletEnvironment used by Spring AI MCP auto-config)
     implementation 'org.springframework:spring-web'
@@ -38,17 +26,12 @@ dependencies {
     // Jackson
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 test {
-    useJUnitPlatform()
     dependsOn shadowJar
     testLogging {
-        events "passed", "skipped", "failed"
         showStandardStreams = true
     }
 }
