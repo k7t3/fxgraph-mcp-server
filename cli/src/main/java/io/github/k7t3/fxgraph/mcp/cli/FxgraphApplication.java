@@ -26,7 +26,7 @@ public class FxgraphApplication {
             printHelp();
             System.exit(1);
         }
-        int exitCode = CliCommandDispatcher.dispatch(args);
+        int exitCode = new CliCommandDispatcher().dispatch(args);
         System.exit(exitCode);
     }
 

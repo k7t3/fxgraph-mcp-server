@@ -6,6 +6,7 @@ import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import io.github.k7t3.fxgraph.mcp.model.JavaFxApplication;
 
 import java.util.*;
+import java.util.function.IntFunction;
 
 /**
  * Parses CLI arguments and dispatches to the appropriate agent command.
@@ -22,7 +23,23 @@ import java.util.*;
  */
 public class CliCommandDispatcher {
 
-    public static int dispatch(String[] args) {
+    /** Factory for creating {@link JavaFxAgent} instances from a PID. Package-private for testing. */
+    @FunctionalInterface
+    interface AgentFactory extends IntFunction<JavaFxAgent> {}
+
+    private final AgentFactory agentFactory;
+
+    /** Creates a dispatcher that connects to real JavaFX JVMs. */
+    public CliCommandDispatcher() {
+        this(pid -> new JavaFxAgent(String.valueOf(pid)));
+    }
+
+    /** Package-private constructor for testing with a mock agent factory. */
+    CliCommandDispatcher(AgentFactory agentFactory) {
+        this.agentFactory = agentFactory;
+    }
+
+    public int dispatch(String[] args) {
         if ("discover".equals(args[0])) {
             return cmdDiscover();
         }
@@ -62,8 +79,8 @@ public class CliCommandDispatcher {
     // Agent-connected commands
     // ===================================================
 
-    private static int runWithAgent(int pid, String[] args) {
-        JavaFxAgent agent = new JavaFxAgent(String.valueOf(pid));
+    private int runWithAgent(int pid, String[] args) {
+        JavaFxAgent agent = agentFactory.apply(pid);
         try {
             agent.connect();
             return dispatchAgentCommand(agent, args);
