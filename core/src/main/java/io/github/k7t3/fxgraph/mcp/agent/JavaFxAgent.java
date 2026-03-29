@@ -39,31 +39,34 @@ public class JavaFxAgent {
     }
 
     /**
-     * Attach to the target JVM and inject the inspector agent.
+     * Attach to the target JVM and inject the inspector agent if not already running.
+     * If the agent is already injected (port property is set), skips injection and
+     * connects directly to the existing agent socket.
      */
     public boolean connect() throws Exception {
         try {
             vm = VirtualMachine.attach(pid);
 
-            // Find the agent JAR. It should be bundled alongside the MCP server JAR.
-            String agentJarPath = findAgentJar();
+            // Check if agent is already running in the target JVM
+            String portStr = vm.getSystemProperties().getProperty("fxgraph.agent.port");
+            if (portStr == null) {
+                portStr = vm.getAgentProperties().getProperty("fxgraph.agent.port");
+            }
 
-            // Load the agent into the target JVM
-            vm.loadAgent(agentJarPath);
+            if (portStr == null) {
+                // Agent not yet running — inject it
+                String agentJarPath = findAgentJar();
+                vm.loadAgent(agentJarPath);
 
-            // Get the port assigned by the agent.
-            // The agent sets it via System.setProperty() in the target JVM,
-            // so we read it from system properties.
-            // We may need to retry as the agent starts asynchronously.
-            String portStr = null;
-            for (int i = 0; i < 10 && portStr == null; i++) {
-                portStr = vm.getSystemProperties().getProperty("fxgraph.agent.port");
-                if (portStr == null) {
-                    // Also try agent properties as fallback
-                    portStr = vm.getAgentProperties().getProperty("fxgraph.agent.port");
-                }
-                if (portStr == null) {
-                    Thread.sleep(500);
+                // Wait for agent to start and publish its port
+                for (int i = 0; i < 10 && portStr == null; i++) {
+                    portStr = vm.getSystemProperties().getProperty("fxgraph.agent.port");
+                    if (portStr == null) {
+                        portStr = vm.getAgentProperties().getProperty("fxgraph.agent.port");
+                    }
+                    if (portStr == null) {
+                        Thread.sleep(500);
+                    }
                 }
             }
 
@@ -73,7 +76,7 @@ public class JavaFxAgent {
 
             agentPort = Integer.parseInt(portStr);
 
-            // Connect to the agent
+            // Connect to the agent socket
             socket = new Socket("127.0.0.1", agentPort);
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             writer = socket.getOutputStream();
@@ -93,7 +96,8 @@ public class JavaFxAgent {
     }
 
     /**
-     * Disconnect from the target JVM.
+     * Disconnect from the target JVM, sending a SHUTDOWN command to stop the agent.
+     * Use this when the session should be fully terminated (e.g., MCP server mode).
      */
     public void disconnect() {
         connected = false;
@@ -101,11 +105,40 @@ public class JavaFxAgent {
 
         if (socket != null) {
             try {
-                // Send shutdown command
                 sendCommandNoResponse(new AgentCommand(AgentCommand.CommandType.SHUTDOWN));
             } catch (Exception e) {
                 // Ignore
             }
+            try {
+                socket.close();
+            } catch (IOException e) {
+                // Ignore
+            }
+            socket = null;
+            reader = null;
+            writer = null;
+        }
+
+        if (vm != null) {
+            try {
+                vm.detach();
+            } catch (IOException e) {
+                // Ignore
+            }
+            vm = null;
+        }
+    }
+
+    /**
+     * Close the socket connection and detach the VM without shutting down the agent.
+     * The agent continues running in the target JVM, ready for future connections.
+     * Use this in CLI mode where each invocation connects and disconnects independently.
+     */
+    public void disconnectWithoutShutdown() {
+        connected = false;
+        agentPort = -1;
+
+        if (socket != null) {
             try {
                 socket.close();
             } catch (IOException e) {
@@ -168,7 +201,7 @@ public class JavaFxAgent {
      * Find the agent JAR file path.
      * The agent JAR (fxgraph-agent.jar) is a minimal JAR containing only the inspector
      * classes and Jackson, without Spring Boot or other server-side dependencies.
-     * It should be co-located with the MCP server JAR.
+     * It should be co-located with the MCP server or CLI JAR.
      */
     private String findAgentJar() throws Exception {
         // Strategy 1: Explicit system property
@@ -190,7 +223,7 @@ public class JavaFxAgent {
             }
         }
 
-        // Strategy 3: Development mode - look in build/libs and agent/build/libs
+        // Strategy 3: Development mode - look in build/libs directories
         File[] devCandidates = {
                 new File("agent/build/libs/" + AGENT_JAR_NAME),
                 new File("build/libs/" + AGENT_JAR_NAME),
@@ -202,7 +235,7 @@ public class JavaFxAgent {
         }
 
         throw new Exception("Agent JAR (" + AGENT_JAR_NAME + ") not found. "
-                + "Ensure it is in the same directory as the MCP server JAR, "
+                + "Ensure it is in the same directory as the JAR, "
                 + "or set system property 'fxgraph.agent.jar' to its path.");
     }
 
@@ -215,7 +248,6 @@ public class JavaFxAgent {
 
         List<VirtualMachineDescriptor> vms = VirtualMachine.list();
         for (VirtualMachineDescriptor vmd : vms) {
-            // Skip our own JVM process
             if (currentPid.equals(vmd.id())) continue;
 
             try {
@@ -226,17 +258,11 @@ public class JavaFxAgent {
                     String vmName = sysProps.getProperty("java.vm.name");
                     String classPath = sysProps.getProperty("java.class.path", "");
 
-                    // Check if JavaFX is available - the javafx.version system property
-                    // is set when JavaFX runtime is loaded (same approach as Scenic View).
-                    // Also check classpath/module path for JavaFX artifacts as fallback.
                     boolean likelyJavaFx = isJavaFxLikely(sysProps, classPath);
+                    if (!likelyJavaFx) continue;
 
-                    // Check if our agent is already injected
                     String agentPort = sysProps.getProperty("fxgraph.agent.port");
                     boolean alreadyConnected = agentPort != null;
-
-                    // Only return JavaFX applications
-                    if (!likelyJavaFx) continue;
 
                     JavaFxApplication app = new JavaFxApplication();
                     app.setPid(Integer.parseInt(vmd.id()));

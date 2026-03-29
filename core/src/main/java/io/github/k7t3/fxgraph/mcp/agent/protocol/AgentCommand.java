@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.Map;
 
 /**
- * Command sent from MCP server to the injected agent.
+ * Command sent from MCP server or CLI to the injected agent.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AgentCommand {

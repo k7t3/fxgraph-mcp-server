@@ -31,10 +31,9 @@ dependencies {
     // Spring Web (provides StandardServletEnvironment used by Spring AI MCP auto-config)
     implementation 'org.springframework:spring-web'
 
-    // Agent subproject - provides protocol classes (AgentCommand, AgentResponse)
-    // used by the MCP server side for communication.
-    // The agent JAR itself is loaded separately into target JVMs via Attach API.
-    implementation project(':agent')
+    // Core subproject - provides JavaFxAgent, protocol classes, and model classes.
+    // The agent JAR itself is still loaded separately into target JVMs via Attach API.
+    implementation project(':core')
 
     // Jackson
     implementation 'com.fasterxml.jackson.core:jackson-databind'

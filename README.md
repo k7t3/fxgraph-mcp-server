@@ -24,12 +24,18 @@ FXGraph MCP Serverは、実行中のJavaFXアプリケーションに接続し�
 ### ビルド
 
 ```bash
+# MCPサーバー
 ./gradlew :mcp-server:shadowJar
+
+# CLI ツール
+./gradlew :cli:shadowJar
 ```
 
 ビルド成果物：
 - `mcp-server/build/libs/fxgraph-mcp-server.jar` - MCPサーバー本体 (~21MB)
 - `mcp-server/build/libs/fxgraph-agent.jar` - エージェントJAR (~2MB、対象JVMに注入)
+- `cli/build/libs/fxgraph-cli.jar` - CLI ツール (Spring不使用、軽量)
+- `cli/build/libs/fxgraph-agent.jar` - エージェントJAR (CLI用コピー)
 
 ### テスト
 
@@ -44,6 +50,35 @@ MCPサーバーはSTDIOトランスポートで動作します。通常はMCPク
 ```bash
 java -jar mcp-server/build/libs/fxgraph-mcp-server.jar
 ```
+
+### CLI ツールの使用
+
+`fxgraph-cli.jar` はSpring Bootを使用しない軽量CLIツールです。パイプラインでのJSON処理に最適です：
+
+```bash
+# 実行中のJavaFXアプリ一覧
+java -jar cli/build/libs/fxgraph-cli.jar discover
+
+# PIDを取得してウィンドウ一覧を表示
+PID=$(java -jar cli/build/libs/fxgraph-cli.jar discover | jq '.[0].pid')
+java -jar cli/build/libs/fxgraph-cli.jar $PID stages
+
+# シーングラフ取得（深さ制限・バウンド付き）
+java -jar cli/build/libs/fxgraph-cli.jar $PID scenegraph --depth 3 --bounds
+
+# ノード詳細取得
+java -jar cli/build/libs/fxgraph-cli.jar $PID node-details $NODE_ID
+
+# プロパティ変更
+java -jar cli/build/libs/fxgraph-cli.jar $PID set-property $NODE_ID text "Hello"
+
+# スクリーンショット
+java -jar cli/build/libs/fxgraph-cli.jar $PID screenshot ./screenshot.png
+```
+
+全出力はJSON形式。エラーはstderrに出力されexit code 1で終了します。
+
+CLIコマンド一覧は `java -jar fxgraph-cli.jar` で確認できます。
 
 ### MCPクライアントへの登録
 
@@ -109,6 +144,8 @@ await client.connect(transport);
 
 ## アーキテクチャ
 
+### MCPサーバーモード
+
 ```
 ┌─────────────┐     STDIO      ┌─────────────────────┐     TCP Socket     ┌─────────────────┐
 │  MCP Client │  ───────────►  │  fxgraph-mcp-server │  ───────────────►  │  fxgraph-agent  │
@@ -123,13 +160,30 @@ await client.connect(transport);
                                                                          └────────────────────┘
 ```
 
-### エージェントJAR分離
+### CLI + Agent Skills モード
+
+```
+┌──────────────┐  Shell/Pipeline  ┌────────────────┐   TCP Socket   ┌─────────────────┐
+│  AI (Skills) │  ──────────────►  │  fxgraph-cli   │  ───────────►  │  fxgraph-agent  │
+│              │  ◄──────────────  │  (Spring不使用) │  ◄───────────  │  (~2MB)         │
+└──────────────┘   JSON stdout     └────────────────┘                └────────┬────────┘
+                                                                              │ injected into
+                                                                              ▼
+                                                                     ┌────────────────────┐
+                                                                     │  JavaFX App JVM    │
+                                                                     └────────────────────┘
+```
+
+各CLIコマンドは独立して実行（ステートレス）。エージェントは対象JVMに常駐するため2回目以降は再注入不要で高速。
+
+### JAR の分離
 
 エージェントは対象JVMにロードされるため、依存関係を最小化しています：
 - **fxgraph-agent.jar** (~2MB) - Jackson + インスペクタクラスのみ
+- **fxgraph-cli.jar** - Spring不使用の軽量CLIツール (`core` + Jackson のみ)
 - **fxgraph-mcp-server.jar** (~21MB) - Spring Boot含む完全なMCPサーバー
 
-これにより、クラスローダーの競合リスクを最小化しています。
+エージェントJARをシンプルに保つことでクラスローダーの競合リスクを最小化しています。
 
 ## ツール一覧
 
@@ -202,30 +256,38 @@ selectNode(sessionId: "xxx", nodeId: 789, showBounds: true)
 
 ```
 fxgraph-mcp-server/
-├── agent/                          # エージェントサブプロジェクト
+├── agent/                          # エージェントサブプロジェクト (対象JVM内で実行)
 │   └── src/main/java/
 │       └── io/github/k7t3/fxgraph/mcp/agent/
-│           ├── inspector/          # 対象JVM内で実行されるクラス
+│           ├── inspector/          # シーングラフ操作クラス
 │           │   ├── FxGraphInspectorAgent.java
 │           │   ├── SceneGraphInspector.java
 │           │   └── ChildrenGetter.java
-│           └── protocol/           # JSONプロトコル（共有）
-│               ├── AgentCommand.java
-│               └── AgentResponse.java
-├── mcp-server/                     # MCPサーバーサブプロジェクト
+│           └── protocol/           # JSONプロトコル (agent独立コピー)
+├── core/                           # 共有ロジック (Spring不使用)
 │   └── src/main/java/
 │       └── io/github/k7t3/fxgraph/mcp/
-│           ├── agent/              # Attach API・セッション管理
-│           │   ├── JavaFxAgent.java
-│           │   └── SessionManager.java
-│           ├── model/              # データモデル
-│           ├── server/             # Spring Bootエントリポイント
-│           └── tools/              # MCPツール定義
-│               └── FxgraphService.java
-├── javafx-test-app/                # テスト用JavaFXアプリ（将来実装）
-├── docs/
-│   └── tools-reference.md          # ツール詳細仕様
-└── AGENTS.md                       # 開発者向けアーキテクチャガイド
+│           ├── agent/              # JavaFxAgent (JVM接続・エージェント注入)
+│           │   └── protocol/       # AgentCommand / AgentResponse
+│           └── model/              # データモデル (SVNode, StageInfo, etc.)
+├── cli/                            # CLI ツール (fxgraph-cli.jar)
+│   └── src/main/java/
+│       └── io/github/k7t3/fxgraph/mcp/cli/
+│           ├── FxgraphApplication.java   # main エントリポイント
+│           ├── CliCommandDispatcher.java # コマンドルーティング・実装
+│           └── CliJsonOutput.java        # JSON stdout 出力
+├── mcp-server/                     # MCPサーバー (Spring Boot, fxgraph-mcp-server.jar)
+│   └── src/main/java/
+│       └── io/github/k7t3/fxgraph/mcp/
+│           ├── agent/              # SessionManager (Spring @Component)
+│           ├── server/             # McpServerApplication (Spring Boot main)
+│           └── tools/              # FxgraphService (MCPツール定義)
+├── skills/                         # Agent Skills (GitHub Copilot)
+│   ├── fxgraph-inspect/SKILL.md   # シーングラフ検査スキル
+│   └── fxgraph-interact/SKILL.md  # UI操作スキル
+├── javafx-test-app/                # テスト用JavaFXアプリ
+└── docs/
+    └── tools-reference.md          # MCPツール詳細仕様
 ```
 
 ## Scenic View との関係

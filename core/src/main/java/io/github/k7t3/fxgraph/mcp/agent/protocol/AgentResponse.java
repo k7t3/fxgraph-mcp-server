@@ -3,7 +3,7 @@ package io.github.k7t3.fxgraph.mcp.agent.protocol;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * Response sent from injected agent back to the MCP server.
+ * Response sent from injected agent back to the MCP server or CLI.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AgentResponse {
