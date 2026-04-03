@@ -240,6 +240,7 @@ AtlantaFX (NordDark テーマ) を使った Todo リストアプリをサンプ�
 - **ノード ID はセッション内でのみ安定** — `System.identityHashCode(node)` を使用しているため、JVM 再起動後は変化します。
 - **Java Attach API** — 一部の JVM 設定では `AttachNotSupportedException` が発生する場合があります。その際は起動オプションに `-Djdk.attach.allowAttachSelf=true` の追加をお試しください。
 - **MCP サーバーログ** — STDIO を汚染しないよう、ログはすべてローリングファイル (`fxgraph.log`) へ出力されます。
+- **UI 操作の実現性** — クリック・キー入力エミュレーションは OS のセキュリティ制限により低レベルな入力注入が不可能なため、JavaFX イベントシステム経由での模倣を行っています。このため、対象アプリケーションの実装次第では動作しない場合があります（例：ネイティブイベントに依存するコントロール、カスタム描画ノードなど）。
 
 ## 関連
 
