@@ -47,3 +47,13 @@ tasks.named('startScripts')       { dependsOn copyAgentJar }
 tasks.named('shadowDistZip')      { dependsOn copyAgentJar }
 tasks.named('shadowDistTar')      { dependsOn copyAgentJar }
 tasks.named('startShadowScripts') { dependsOn copyAgentJar }
+
+// Deploy CLI and agent jars into the fxgraph Agent Skill scripts directory
+tasks.register('installSkillJars', Copy) {
+    group       = 'skills'
+    description = 'Copy fxgraph-cli.jar and fxgraph-agent.jar into skills/fxgraph/scripts/'
+    dependsOn shadowJar, copyAgentJar
+    from layout.buildDirectory.dir('libs')
+    include 'fxgraph-cli.jar', 'fxgraph-agent.jar'
+    into rootProject.layout.projectDirectory.dir('skills/fxgraph/scripts')
+}
