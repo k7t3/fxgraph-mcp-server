@@ -226,6 +226,24 @@ class CliCommandDispatcherTest {
         assertEquals(1, code);
     }
 
+    @Test
+    void nodeDetailsWithPropsHintsAtFilter() throws Exception {
+        int code = dispatcher.dispatch(new String[]{"12345", "node-details", "123", "--props"});
+        assertEquals(1, code);
+        String err = errContent.toString();
+        assertTrue(err.contains("--props"), "error should mention --props");
+        assertTrue(err.contains("--filter"), "error should suggest --filter as the alternative");
+    }
+
+    @Test
+    void scenegraphWithJsonHintsNoFlagNeeded() throws Exception {
+        int code = dispatcher.dispatch(new String[]{"12345", "scenegraph", "--json"});
+        assertEquals(1, code);
+        String err = errContent.toString();
+        assertTrue(err.contains("--json"), "error should mention --json");
+        assertTrue(err.contains("JSON"), "error should clarify JSON is always the output format");
+    }
+
     // ===================================================
     // set-property
     // ===================================================

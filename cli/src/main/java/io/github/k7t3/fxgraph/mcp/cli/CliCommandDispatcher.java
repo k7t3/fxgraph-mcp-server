@@ -133,7 +133,7 @@ public class CliCommandDispatcher {
                 case "--transforms" -> params.put("includeTransforms", true);
                 case "--filter"     -> params.put("propertyFilter",
                         Arrays.asList(requireNext(args, ++i, "--filter").split(",")));
-                default             -> throw new IllegalArgumentException("Unknown option: " + args[i]);
+                default             -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         AgentResponse resp = agent.sendCommand(
@@ -153,8 +153,13 @@ public class CliCommandDispatcher {
             if ("--filter".equals(args[i])) {
                 params.put("propertyFilter",
                         Arrays.asList(requireNext(args, ++i, "--filter").split(",")));
+            } else if ("--props".equals(args[i])) {
+                throw new IllegalArgumentException(
+                        "--props is not valid for node-details. " +
+                        "Use --filter <prop1,prop2> to select specific properties instead. " +
+                        "(--props is only available for the scenegraph command.)");
             } else {
-                throw new IllegalArgumentException("Unknown option: " + args[i]);
+                throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         AgentResponse resp = agent.sendCommand(
@@ -179,7 +184,7 @@ public class CliCommandDispatcher {
             if ("--type".equals(args[i])) {
                 params.put("valueType", requireNext(args, ++i, "--type"));
             } else {
-                throw new IllegalArgumentException("Unknown option: " + args[i]);
+                throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         AgentResponse resp = agent.sendCommand(
@@ -197,7 +202,7 @@ public class CliCommandDispatcher {
             if ("--no-bounds".equals(args[i])) {
                 showBounds = false;
             } else {
-                throw new IllegalArgumentException("Unknown option: " + args[i]);
+                throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         Map<String, Object> params = new LinkedHashMap<>();
@@ -241,7 +246,7 @@ public class CliCommandDispatcher {
             if ("--nodeId".equals(args[i])) {
                 params.put("nodeId", Integer.parseInt(requireNext(args, ++i, "--nodeId")));
             } else {
-                throw new IllegalArgumentException("Unknown option: " + args[i]);
+                throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         AgentResponse resp = agent.sendCommand(
@@ -261,7 +266,7 @@ public class CliCommandDispatcher {
                 case "--nodeId"  -> params.put("nodeId",
                         Integer.parseInt(requireNext(args, ++i, "--nodeId")));
                 case "--stageId" -> params.put("stageId", requireNext(args, ++i, "--stageId"));
-                default          -> throw new IllegalArgumentException("Unknown option: " + args[i]);
+                default          -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         AgentResponse resp = agent.sendCommand(
@@ -272,6 +277,20 @@ public class CliCommandDispatcher {
     // ===================================================
     // Helpers
     // ===================================================
+
+    /**
+     * Produces a descriptive error message for unknown options,
+     * providing actionable hints for common mistakes.
+     */
+    private static String unknownOptionMessage(String option) {
+        return switch (option) {
+            case "--json" -> "Unknown option: --json. All commands output JSON by default — no flag needed.";
+            case "--props" -> "Unknown option: --props. " +
+                    "--props is only valid for the scenegraph command. " +
+                    "For node-details, use --filter <prop1,prop2> instead.";
+            default -> "Unknown option: " + option;
+        };
+    }
 
     private static int outputResponse(AgentResponse resp) {
         if (!resp.isSuccess()) {
