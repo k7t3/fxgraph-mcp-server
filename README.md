@@ -1,314 +1,251 @@
-# FXGraph MCP Server
+# fxgraph-mcp-server
 
-[![Java 21](https://img.shields.io/badge/Java-21-blue)](https://adoptium.net/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.2-green)](https://spring.io/projects/spring-boot)
-[![Gradle](https://img.shields.io/badge/Gradle-9.0.0-orange)](https://gradle.org/)
+生成 AI エージェントが実行中の JavaFX アプリケーションをリアルタイムに分析・操作するための MCP サーバーと Agent Skills を提供するプロジェクトです。
 
-JavaFXアプリケーションのシーングラフを実行時に分析・操作するための[MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバーです。
+Java Attach API でターゲット JVM にインスペクタエージェントを動的注入し、シーングラフの探索・プロパティ変更・UI 操作・スクリーンショット取得などを AI から直接実行できます。
 
-## 概要
+## 機能概要
 
-FXGraph MCP Serverは、実行中のJavaFXアプリケーションに接続し、そのシーングラフ（UIコンポーネント階層）をAIアシスタントから調査・操作できるようにします。これは[Scenic View](https://github.com/JonathanGiles/scenic-view)をMCPプロトコルでラップしたようなものです。
+- **シーングラフ探索** — 実行中の JavaFX アプリのウィンドウ・ノードツリーを JSON で取得
+- **プロパティ読み取り・変更** — テキスト・スタイル・表示状態などのプロパティを動的に操作
+- **UI インタラクション** — クリック・フォーカス・キー入力を JavaFX イベントシステム経由で送信
+- **ノードハイライト** — 対象ノードを視覚的なオーバーレイでハイライト表示
+- **スクリーンショット** — ノード単体またはシーン全体を PNG 保存
 
-### 主な機能
+## アーキテクチャ
 
-- **🔍 アプリケーション検出** - 実行中のJavaFXアプリケーションを自動検出
-- **🔗 動的接続** - Java Attach APIを使用して対象JVMにエージェントを注入
-- **🌳 シーングラフ取得** - UIコンポーネント階層をツリー構造で取得
-- **📊 プロパティ閲覧** - ノードのプロパティ（レイアウト、スタイル、コンテンツ等）を取得
-- **✏️ プロパティ変更** - 実行中のアプリケーションのUIをリアルタイムに変更
-- **🎯 ノードハイライト** - 対象アプリケーション内で特定ノードを視覚的に強調表示
+```
+MCP Client (AI / OpenCode)
+  └─[STDIO]─► McpServerApplication (Spring Boot)
+                └─► FxgraphService (@Tool × 12 メソッド)
+                      └─► JavaFxAgent (Attach API + TCP socket)
+                            └─[TCP NDJSON]─► FxGraphInspectorAgent (注入済みエージェント)
+                                               └─► SceneGraphInspector
+                                                     └─► JavaFX Scene Graph
 
-## クイックスタート
+Agent Skills（CLI 経由）:
+AI → bash → scripts/fxgraph → fxgraph-cli.jar
+              └─► CliCommandDispatcher
+                    └─► JavaFxAgent
+```
+
+通信プロトコルは **改行区切り JSON（NDJSON）over TCP**。MCP サーバーは **STDIO トランスポート** で動作します。
+
+## サブプロジェクト構成
+
+| モジュール | 役割 |
+|---|---|
+| `core` | 共有モデル・プロトコル・エージェント通信ロジック（Spring 非依存） |
+| `agent` | 対象 JVM に注入される Java Agent（Spring 非依存） |
+| `cli` | 軽量 CLI ツール（Agent Skills から直接利用） |
+| `mcp-server` | Spring Boot MCP サーバー（STDIO モード） |
+| `javafx-test-app` | 動作確認用サンプル JavaFX アプリ |
+| `skills/fxgraph` | AI Agent Skill 定義・スクリプト |
+
+## 必要要件
+
+- Java 21+
+- Gradle（プロジェクトに `gradlew` 同梱）
+- 対象の JavaFX アプリケーション（Java 11+ で動作）
+
+## セットアップ
 
 ### ビルド
 
 ```bash
-# MCPサーバー
+# プロジェクト全体をビルド
+./gradlew build
+
+# 各モジュールの Shadow JAR を生成
+./gradlew :mcp-server:shadowJar   # → mcp-server/build/libs/fxgraph-mcp-server.jar
+./gradlew :cli:shadowJar          # → cli/build/libs/fxgraph-cli.jar
+./gradlew :agent:shadowJar        # → agent/build/libs/fxgraph-agent.jar
+```
+
+### MCP サーバーとして使用する（OpenCodeの場合）
+
+`fxgraph-mcp-server.jar` を生成し、OpenCode の設定ファイルに追記します。
+
+```bash
 ./gradlew :mcp-server:shadowJar
-
-# CLI ツール
-./gradlew :cli:shadowJar
 ```
 
-ビルド成果物：
-- `mcp-server/build/libs/fxgraph-mcp-server.jar` - MCPサーバー本体 (~21MB)
-- `mcp-server/build/libs/fxgraph-agent.jar` - エージェントJAR (~2MB、対象JVMに注入)
-- `cli/build/libs/fxgraph-cli.jar` - CLI ツール (Spring不使用、軽量)
-- `cli/build/libs/fxgraph-agent.jar` - エージェントJAR (CLI用コピー)
-
-### テスト
-
-```bash
-./gradlew test
-```
-
-### 実行
-
-MCPサーバーはSTDIOトランスポートで動作します。通常はMCPクライアント（Claude Desktop等）から起動されます：
-
-```bash
-java -jar mcp-server/build/libs/fxgraph-mcp-server.jar
-```
-
-### CLI ツールの使用
-
-`fxgraph-cli.jar` はSpring Bootを使用しない軽量CLIツールです。パイプラインでのJSON処理に最適です：
-
-```bash
-# 実行中のJavaFXアプリ一覧
-java -jar cli/build/libs/fxgraph-cli.jar discover
-
-# PIDを取得してウィンドウ一覧を表示
-PID=$(java -jar cli/build/libs/fxgraph-cli.jar discover | jq '.[0].pid')
-java -jar cli/build/libs/fxgraph-cli.jar $PID stages
-
-# シーングラフ取得（深さ制限・バウンド付き）
-java -jar cli/build/libs/fxgraph-cli.jar $PID scenegraph --depth 3 --bounds
-
-# ノード詳細取得
-java -jar cli/build/libs/fxgraph-cli.jar $PID node-details $NODE_ID
-
-# プロパティ変更
-java -jar cli/build/libs/fxgraph-cli.jar $PID set-property $NODE_ID text "Hello"
-
-# スクリーンショット
-java -jar cli/build/libs/fxgraph-cli.jar $PID screenshot ./screenshot.png
-```
-
-全出力はJSON形式。エラーはstderrに出力されexit code 1で終了します。
-
-CLIコマンド一覧は `java -jar fxgraph-cli.jar` で確認できます。
-
-### MCPクライアントへの登録
-
-このサーバーをMCPクライアントで使用するには、設定ファイルにサーバーを登録します。
-
-#### Claude Desktop
-
-`~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）または `%APPDATA%/Claude/claude_desktop_config.json`（Windows）に追加：
+**`~/.config/opencode/config.json` の設定例:**
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "fxgraph": {
-      "command": "java",
-      "args": [
-        "-jar",
-        "/path/to/fxgraph-mcp-server.jar"
-      ]
+      "type": "local",
+      "command": ["java", "-jar", "/path/to/fxgraph-mcp-server.jar"],
+      "enabled": true
     }
   }
 }
 ```
 
-#### Cline / Roo Code (VS Code)
+使用するには、プロンプトで `use the fxgraph tool` と指定します。
 
-`.vscode/mcp-settings.json` に追加：
+> `fxgraph-agent.jar` は `fxgraph-mcp-server.jar` と同じディレクトリに自動でコピーされます。
 
-```json
-{
-  "servers": [
-    {
-      "name": "fxgraph",
-      "type": "stdio",
-      "command": "java",
-      "args": ["-jar", "/path/to/fxgraph-mcp-server.jar"]
-    }
-  ]
-}
+### Agent Skills として使用する（CLI）
+
+CLI と Agent JAR を `skills/fxgraph/scripts/` へデプロイします。
+
+```bash
+./gradlew :cli:installSkillJars
 ```
 
-#### Claude Code
-
-`.claude/CLAUDE.md` またはプロンプトで：
+デプロイ後の構成:
 
 ```
-/mcp add fxgraph java -jar /path/to/fxgraph-mcp-server.jar
+skills/fxgraph/scripts/
+├── fxgraph             # 実行ラッパースクリプト
+├── fxgraph-cli.jar     # CLI ツール
+└── fxgraph-agent.jar   # 対象 JVM に注入されるエージェント
 ```
 
-#### カスタムMCPクライアント
+AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませることで、CLI 経由でも同等の操作が可能になります。
 
-```javascript
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+> JAR ファイルはバージョン管理対象外（`.gitignore`）です。ソース変更後は `installSkillJars` を再実行してください。
 
-const transport = new StdioClientTransport({
-  command: 'java',
-  args: ['-jar', '/path/to/fxgraph-mcp-server.jar']
-});
+## MCP ツール一覧
 
-const client = new Client({ name: 'my-client', version: '1.0.0' });
-await client.connect(transport);
-```
+| ツール | 説明 |
+|---|---|
+| `discoverApplications` | 実行中の JavaFX アプリケーションを一覧取得 |
+| `connectApplication` | PID 指定でアプリケーションに接続し `sessionId` を取得 |
+| `disconnectApplication` | 接続を切断してリソースを解放 |
+| `getStages` | ウィンドウ（Stage）の一覧・サイズ・位置を取得 |
+| `getScenegraph` | シーングラフのツリー構造を取得（深さ・プロパティ・バウンズ指定可） |
+| `getNodeDetails` | 特定ノードの詳細プロパティを取得 |
+| `setProperty` | ノードのプロパティ値を変更（text・style・visible 等） |
+| `selectNode` | ノードを視覚的にハイライト（赤枠オーバーレイ）。`nodeId=0` で解除 |
+| `clickNode` | ノードにクリックイベントを送信 |
+| `requestFocus` | ノードにキーボードフォーカスを要求 |
+| `typeKey` | キー入力イベントを送信（`ENTER`・`TAB` 等のキーコード対応） |
+| `takeScreenshot` | ノードまたはシーン全体のスクリーンショットを PNG 保存 |
 
-## アーキテクチャ
+詳細な入出力スキーマは [`docs/tools-reference.md`](docs/tools-reference.md) を参照してください。
 
-### MCPサーバーモード
-
-```
-┌─────────────┐     STDIO      ┌─────────────────────┐     TCP Socket     ┌─────────────────┐
-│  MCP Client │  ───────────►  │  fxgraph-mcp-server │  ───────────────►  │  fxgraph-agent  │
-│  (AI/Claude)│  ◄───────────  │  (~21MB)            │  ◄───────────────  │  (~2MB)         │
-└─────────────┘                └─────────────────────┘                    └────────┬────────┘
-                                                                                  │
-                                                                                  │ injected into
-                                                                                  ▼
-                                                                         ┌────────────────────┐
-                                                                         │  JavaFX App JVM    │
-                                                                         │  (Target Process)  │
-                                                                         └────────────────────┘
-```
-
-### CLI + Agent Skills モード
-
-```
-┌──────────────┐  Shell/Pipeline  ┌────────────────┐   TCP Socket   ┌─────────────────┐
-│  AI (Skills) │  ──────────────►  │  fxgraph-cli   │  ───────────►  │  fxgraph-agent  │
-│              │  ◄──────────────  │  (Spring不使用) │  ◄───────────  │  (~2MB)         │
-└──────────────┘   JSON stdout     └────────────────┘                └────────┬────────┘
-                                                                              │ injected into
-                                                                              ▼
-                                                                     ┌────────────────────┐
-                                                                     │  JavaFX App JVM    │
-                                                                     └────────────────────┘
-```
-
-各CLIコマンドは独立して実行（ステートレス）。エージェントは対象JVMに常駐するため2回目以降は再注入不要で高速。
-
-### JAR の分離
-
-エージェントは対象JVMにロードされるため、依存関係を最小化しています：
-- **fxgraph-agent.jar** (~2MB) - Jackson + インスペクタクラスのみ
-- **fxgraph-cli.jar** - Spring不使用の軽量CLIツール (`core` + Jackson のみ)
-- **fxgraph-mcp-server.jar** (~21MB) - Spring Boot含む完全なMCPサーバー
-
-エージェントJARをシンプルに保つことでクラスローダーの競合リスクを最小化しています。
-
-## ツール一覧
-
-| ツール名 | 説明 |
-|---------|------|
-| `discoverApplications` | 実行中のJavaプロセスを検出（JavaFXアプリをマーク） |
-| `connectApplication` | PIDで指定したアプリに接続しsessionIdを取得 |
-| `disconnectApplication` | 接続を切断しリソースを解放 |
-| `getStages` | ステージ（ウィンドウ）一覧を取得 |
-| `getScenegraph` | シーングラフ構造をツリー形式で取得 |
-| `getNodeDetails` | 特定ノードの詳細情報を取得 |
-| `setProperty` | ノードのプロパティを変更（text, style, visible等） |
-| `selectNode` | 対象アプリ内でノードをハイライト表示 |
-
-詳細な仕様は[docs/tools-reference.md](docs/tools-reference.md)を参照してください。
-
-## 使用例
-
-### 基本的な調査フロー
+## 使用例（MCP ツール呼び出しフロー）
 
 ```
 1. discoverApplications()
-   → { "applications": [{ "pid": 12345, "javaFX": true, ... }] }
+   → [{ "pid": 12345, "mainClass": "com.example.MyApp", "javaFX": true }]
 
 2. connectApplication(pid: 12345)
-   → { "sessionId": "xxx", "agentPort": 54321 }
+   → { "sessionId": "550e8400-...", "agentPort": 54321 }
 
-3. getStages(sessionId: "xxx")
-   → { "data": [{ "stageId": "123", "title": "Main Window" }] }
+3. getStages(sessionId: "550e8400-...")
+   → [{ "stageId": "...", "title": "Main Window", "rootNodeId": 987654321 }]
 
-4. getScenegraph(sessionId: "xxx", depth: 3)
-   → { "rootNodes": [{ "nodeId": 456, "nodeClass": "VBox", ... }] }
+4. getScenegraph(sessionId: "...", depth: 3, includeProperties: true, propertyFilter: ["text"])
+   → { "rootNodes": [{ "nodeId": 987654321, "type": "VBox", "children": [...] }] }
 
-5. getNodeDetails(sessionId: "xxx", nodeId: 456)
-   → { "properties": [{ "name": "spacing", "value": 10 }, ...] }
+5. setProperty(sessionId: "...", nodeId: 123456, propertyName: "text", value: "Hello")
+   → { "oldValue": "Click Me", "newValue": "Hello" }
 
-6. selectNode(sessionId: "xxx", nodeId: 456)
-   → 対象アプリでノードに赤い枠線が表示される
+6. takeScreenshot(sessionId: "...", savePath: "/tmp/result.png")
+   → { "savedPath": "/tmp/result.png", "width": 800, "height": 600 }
 
-7. disconnectApplication(sessionId: "xxx")
+7. disconnectApplication(sessionId: "...")
+   → { "success": true }
 ```
 
-### プロパティ変更の例
+## CLI コマンド一覧
 
-```
-getNodeDetails(sessionId: "xxx", nodeId: 789)
-→ { "properties": [{ "name": "text", "value": "Old Text", "writable": true }] }
+Agent Skills から `bash` ツール経由で実行します。
 
-setProperty(sessionId: "xxx", nodeId: 789, propertyName: "text", value: "New Text")
-→ { "success": true, "oldValue": "Old Text", "newValue": "New Text" }
+```bash
+CLI="/path/to/skills/fxgraph/scripts/fxgraph"
 
-selectNode(sessionId: "xxx", nodeId: 789, showBounds: true)
-→ 変更が視覚的に反映されていることを確認
-```
+# 実行中の JavaFX プロセスを検出
+$CLI discover
 
-## 技術仕様
+# ウィンドウ一覧を取得
+$CLI <PID> stages
 
-| 項目 | 値 |
-|------|-----|
-| **MCP Server Type** | SYNC |
-| **Transport** | STDIO |
-| **Java Version** | 21+ |
-| **Spring Boot** | 4.0.2 |
-| **Spring AI MCP** | 1.1.2 |
-| **Build Tool** | Gradle 9.0.0 |
-| **Node ID** | `System.identityHashCode(node)` |
-| **Protocol** | Line-delimited JSON over TCP |
+# シーングラフを取得（深さ 3、テキストプロパティ付き）
+$CLI <PID> scenegraph --depth 3 --props --filter text
 
-## プロジェクト構成
+# ノードの詳細プロパティを取得（--filter 必須）
+$CLI <PID> node-details <NODE_ID> --filter text,visible,disable
 
-```
-fxgraph-mcp-server/
-├── agent/                          # エージェントサブプロジェクト (対象JVM内で実行)
-│   └── src/main/java/
-│       └── io/github/k7t3/fxgraph/mcp/agent/
-│           ├── inspector/          # シーングラフ操作クラス
-│           │   ├── FxGraphInspectorAgent.java
-│           │   ├── SceneGraphInspector.java
-│           │   └── ChildrenGetter.java
-│           └── protocol/           # JSONプロトコル (agent独立コピー)
-├── core/                           # 共有ロジック (Spring不使用)
-│   └── src/main/java/
-│       └── io/github/k7t3/fxgraph/mcp/
-│           ├── agent/              # JavaFxAgent (JVM接続・エージェント注入)
-│           │   └── protocol/       # AgentCommand / AgentResponse
-│           └── model/              # データモデル (SVNode, StageInfo, etc.)
-├── cli/                            # CLI ツール (fxgraph-cli.jar)
-│   └── src/main/java/
-│       └── io/github/k7t3/fxgraph/mcp/cli/
-│           ├── FxgraphApplication.java   # main エントリポイント
-│           ├── CliCommandDispatcher.java # コマンドルーティング・実装
-│           └── CliJsonOutput.java        # JSON stdout 出力
-├── mcp-server/                     # MCPサーバー (Spring Boot, fxgraph-mcp-server.jar)
-│   └── src/main/java/
-│       └── io/github/k7t3/fxgraph/mcp/
-│           ├── agent/              # SessionManager (Spring @Component)
-│           ├── server/             # McpServerApplication (Spring Boot main)
-│           └── tools/              # FxgraphService (MCPツール定義)
-├── skills/                         # Agent Skills (GitHub Copilot)
-│   ├── fxgraph-inspect/SKILL.md   # シーングラフ検査スキル
-│   └── fxgraph-interact/SKILL.md  # UI操作スキル
-├── javafx-test-app/                # テスト用JavaFXアプリ
-└── docs/
-    └── tools-reference.md          # MCPツール詳細仕様
+# プロパティを変更
+$CLI <PID> set-property <NODE_ID> text "Hello"
+$CLI <PID> set-property <NODE_ID> visible false --type boolean
+
+# ノードをハイライト
+$CLI <PID> select-node <NODE_ID>
+
+# クリック・フォーカス・キー入力
+$CLI <PID> click-node <NODE_ID>
+$CLI <PID> focus <NODE_ID>
+$CLI <PID> type-key ENTER
+
+# スクリーンショット
+$CLI <PID> screenshot ./result.png
+$CLI <PID> screenshot ./node.png --nodeId <NODE_ID>
 ```
 
-## Scenic View との関係
+> すべてのコマンドは JSON を出力します。`--json` フラグは存在しません（渡すとエラーになります）。
+> `--props` フラグは `scenegraph` コマンド専用です。`node-details` では `--filter` を使用してください。
 
-本プロジェクトは[Scenic View](https://github.com/JonathanGiles/scenic-view)のパターンを参考にしています：
+CLI の完全なオプション仕様は `skills/fxgraph/references/` を参照してください。
 
-- `ChildrenGetter` - Scenic Viewの`ChildrenGetter.java`と同等の実装
-- ノードID - `System.identityHashCode()`を使用（Scenic Viewは`hashCode()`）
-- JavaFX検出 - `javafx.version`システムプロパティの存在チェック
-- 子ノード取得 - `Parent.getChildrenUnmodifiable()` / `SubScene.getRoot()`
+## テスト実行
 
-## 貢献
+```bash
+# 全テストを実行
+./gradlew test
 
-バグ報告や機能要望は[GitHub Issues](https://github.com/k7t3/fxgraph-mcp-server/issues)へお願いします。
+# モジュール別テスト
+./gradlew :core:test
+./gradlew :agent:test        # Monocle (headless) で JavaFX テストを実行
+./gradlew :cli:test
+./gradlew :mcp-server:test   # 統合テスト（事前に shadowJar が必要）
 
-## ライセンス
+# 統合テストの事前準備
+./gradlew :mcp-server:shadowJar && ./gradlew :mcp-server:test
+```
 
-[MIT License](LICENSE)
+`agent` モジュールのテストは Monocle ヘッドレスモードで実行されるため、CI 環境でも追加設定不要です。
 
-## 参考
+## 動作確認用サンプルアプリ
 
-- [Model Context Protocol](https://modelcontextprotocol.io/)
-- [Scenic View](https://github.com/JonathanGiles/scenic-view)
-- [Spring AI MCP](https://docs.spring.io/spring-ai/reference/api/mcp.html)
+AtlantaFX (NordDark テーマ) を使った Todo リストアプリをサンプルとして同梱しています。
+
+```bash
+./gradlew :javafx-test-app:run
+```
+
+## 技術スタック
+
+| ライブラリ | バージョン | 用途 |
+|---|---|---|
+| Java | 21 | 言語・ランタイム |
+| Spring Boot | 4.0.2 | MCP サーバー基盤 |
+| Spring AI MCP | 1.1.2 | MCP プロトコル実装 |
+| Jackson | 2.18.3 | JSON シリアライズ |
+| JavaFX | 21 | 対象プラットフォーム |
+| JUnit | 5.10.0 | テストフレームワーク |
+| Mockito | 5.11.0 | テストモック |
+| AtlantaFX | 2.0.1 | テスト用サンプルアプリ |
+
+## 注意事項
+
+- **STDIO トランスポートのみ対応** — 複数の AI エージェントからの同時接続はできません。
+- **ノード ID はセッション内でのみ安定** — `System.identityHashCode(node)` を使用しているため、JVM 再起動後は変化します。
+- **Java Attach API** — 一部の JVM 設定では `AttachNotSupportedException` が発生する場合があります。その際は起動オプションに `-Djdk.attach.allowAttachSelf=true` の追加をお試しください。
+- **MCP サーバーログ** — STDIO を汚染しないよう、ログはすべてローリングファイル (`fxgraph.log`) へ出力されます。
+
+## 関連
+
+- [`Scenic View`](https://github.com/JonathanGiles/scenic-view) — JavaFX アプリのシーングラフをリアルタイムに可視化するツール。アイデアの着想元。
+- [`docs/tools-reference.md`](docs/tools-reference.md) — MCP ツールの詳細リファレンス（入出力スキーマ付き）
+- [`skills/fxgraph/SKILL.md`](skills/fxgraph/SKILL.md) — Agent Skills の定義とワークフロー
+- [`skills/fxgraph/references/inspect-commands.md`](skills/fxgraph/references/inspect-commands.md) — CLI 読み取り系コマンドの詳細
+- [`skills/fxgraph/references/interact-commands.md`](skills/fxgraph/references/interact-commands.md) — CLI 操作系コマンドの詳細
+- [`AGENTS.md`](AGENTS.md) — コード生成・レビュー向けの開発ガイドライン

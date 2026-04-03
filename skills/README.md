@@ -1,63 +1,65 @@
 # Skills
 
-このディレクトリには、FXGraph CLI ツールと連携するための Agent Skills が含まれています。
+This directory contains Agent Skills for use with the FXGraph CLI tool.
 
-## Skills
+## Available Skills
 
-| Skill | 説明 |
+| Skill | Description |
 |-------|-------------|
-| [`fxgraph/`](fxgraph/SKILL.md) | 実行中の JavaFX アプリケーションの検査および操作 |
+| [`fxgraph/`](fxgraph/SKILL.md) | Inspect and interact with running JavaFX applications |
 
-## CLI jar のビルドとインストール
+## Building and Installing the CLI JARs
 
-`fxgraph` skill を使用するには、`skills/fxgraph/scripts/` に `fxgraph-cli.jar` と `fxgraph-agent.jar` が必要です。`installSkillJars` Gradle タスクを使用すると、一度で両方のビルドとデプロイが可能です。
+The `fxgraph` skill requires `fxgraph-cli.jar` and `fxgraph-agent.jar` in `skills/fxgraph/scripts/`.
+Use the `installSkillJars` Gradle task to build and deploy both in one step.
 
-### 前提条件
+### Prerequisites
 
 - Java 21+
-- リポジトリに含まれる Gradle wrapper (`./gradlew`)
+- Gradle wrapper included in the repository (`./gradlew`)
 
-### インストール
+### Installation
 
 ```bash
-# プロジェクトルートから実行 — jars をビルドして skills/fxgraph/scripts/ にコピー
+# Run from the project root — builds the JARs and copies them to skills/fxgraph/scripts/
 ./gradlew :cli:installSkillJars
 ```
 
-このタスクは以下の処理を行います：
-1. `fxgraph-cli.jar` のコンパイルとパッケージ化（`shadowJar` を経由）
-2. `fxgraph-agent.jar` を CLI jar の隣にコピー（`copyAgentJar` を経由）
-3. 両方の jars を `skills/fxgraph/scripts/` にデプロイ
+This task:
+1. Compiles and packages `fxgraph-cli.jar` (via `shadowJar`)
+2. Copies `fxgraph-agent.jar` alongside the CLI jar (via `copyAgentJar`)
+3. Deploys both JARs to `skills/fxgraph/scripts/`
 
-タスク完了後の状態：
+After the task completes, the directory will contain:
 ```
 skills/fxgraph/scripts/
-├── fxgraph-cli.jar    # CLI ツール
-└── fxgraph-agent.jar  # ターゲット JVM に注入されるエージェント
+├── fxgraph             # Executable wrapper script
+├── fxgraph-cli.jar     # CLI tool
+└── fxgraph-agent.jar   # Agent injected into the target JVM
 ```
 
-> **注意**: これらの jar ファイルはバージョン管理から除外されています (`.gitignore`)。
-> ソース変更後は `installSkillJars` を再実行してください。
+> **Note:** The JAR files are excluded from version control (`.gitignore`).
+> Re-run `installSkillJars` after any source changes.
 
-### クイックスタート
+### Quick Start
 
 ```bash
-# ビルドとインストール
+# Build and install
 ./gradlew :cli:installSkillJars
 
-# CLI 変数の設定（シェルセッションに追加）
-CLI="java -jar <path-to-skill>/scripts/fxgraph-cli.jar"
+# Use the wrapper script directly (recommended)
+CLI="<path-to-skill>/scripts/fxgraph"
 
-# 実行中の JavaFX プロセス一覧
+# List running JavaFX processes
 $CLI discover
 
-# 最初に見つかったプロセスのシーングラフを探索
+# Explore the scene graph of the first found process
 PID=$($CLI discover | jq '.[0].pid')
 $CLI $PID scenegraph --depth 3
 ```
 
-### 注意事項
+### Notes
 
-- `fxgraph-agent.jar` は、PID に対して最初のコマンドを実行した際に自動的にターゲット JVM に注入されます — 手動のステップは不要です。
-- エージェントは Java Attach API を使用しており、一部の JVM 設定では `--add-opens` フラグが必要になる場合があります。`AttachNotSupportedException` に遭遇した場合は、プロジェクトの `README.md` を参照してください。
-- ソース変更後は同じ `./gradlew :cli:installSkillJars` コマンドで再ビルドしてください。
+- `fxgraph-agent.jar` is automatically injected into the target JVM on the first command for a given PID — no manual step required.
+- The agent uses the Java Attach API. Some JVM configurations may require `--add-opens` flags. See the project `README.md` if you encounter `AttachNotSupportedException`.
+- To rebuild after source changes, run the same `./gradlew :cli:installSkillJars` command.
