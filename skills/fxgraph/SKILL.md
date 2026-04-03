@@ -18,18 +18,30 @@ Inspect and interact with running JavaFX applications using the bundled `fxgraph
 
 ## Setup
 
-The CLI jar lives in this skill's `scripts/` directory. An executable wrapper script is provided.
-Use the **absolute path** shown in the skill's base directory info at the bottom of this file:
+The CLI jar lives in this skill's `scripts/` directory. Wrapper scripts are provided for each platform.
+Use the **absolute path** to the script that matches the current OS.
 
+**macOS / Linux (bash):**
 ```bash
-# Use the absolute path from "Base directory for this skill:" shown below
-# e.g. if base is /Users/you/.claude/skills/fxgraph, set:
 CLI="/Users/you/.claude/skills/fxgraph/scripts/fxgraph"
+```
+
+**Windows (PowerShell):**
+```powershell
+$CLI = "C:\Users\you\.claude\skills\fxgraph\scripts\fxgraph.bat"
+```
+
+**Windows (cmd):**
+```bat
+SET CLI=C:\Users\you\.claude\skills\fxgraph\scripts\fxgraph.bat
 ```
 
 If `fxgraph-cli.jar` is missing, build it first — see `skills/README.md`.
 
 `fxgraph-agent.jar` must remain in the same `scripts/` directory; it is injected automatically.
+
+> **Windows PowerShell note:** Prefix every `$CLI` invocation with the call operator `&`.
+> The examples below use `$CLI ...` (bash style) — on PowerShell replace with `& $CLI ...`.
 
 ## Critical rules — read before using any command
 
@@ -54,7 +66,11 @@ $CLI discover
 Output: JSON array of `{ pid, mainClass, vmName, javaFX, connected }`.
 
 ```bash
+# bash / zsh
 PID=$($CLI discover | jq '.[0].pid')
+
+# PowerShell
+$PID = (& $CLI discover | jq '.[0].pid')
 ```
 
 ### Step 2 — Get windows (Stages)
@@ -66,7 +82,11 @@ $CLI $PID stages
 Output: `{ stageId, title, width, height, x, y, focused, rootNodeId }`.
 
 ```bash
+# bash / zsh
 ROOT=$($CLI $PID stages | jq '.[] | select(.focused) | .rootNodeId')
+
+# PowerShell
+$ROOT = (& $CLI $PID stages | jq '.[] | select(.focused) | .rootNodeId')
 ```
 
 ### Step 3 — Traverse the scene graph

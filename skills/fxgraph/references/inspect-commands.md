@@ -3,6 +3,7 @@
 Detailed options and output schemas for read-only inspection commands.
 
 > **Prerequisite**: Set up `$CLI` as described in SKILL.md before running any command.
+> On Windows PowerShell, prefix every `$CLI` call with `&` (e.g. `& $CLI discover`).
 
 ## discover
 
@@ -58,9 +59,13 @@ $CLI $PID stages
 - `focused: true` — the currently active window.
 
 ```bash
-# Get the root node ID of the focused window
+# bash / zsh
 ROOT=$($CLI $PID stages | jq '.[] | select(.focused) | .rootNodeId')
 STAGE_ID=$($CLI $PID stages | jq -r '.[] | select(.focused) | .stageId')
+
+# PowerShell
+$ROOT = (& $CLI $PID stages | jq '.[] | select(.focused) | .rootNodeId')
+$STAGE_ID = (& $CLI $PID stages | jq -r '.[] | select(.focused) | .stageId')
 ```
 
 ---

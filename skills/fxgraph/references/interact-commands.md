@@ -3,6 +3,7 @@
 Detailed options and output schemas for commands that modify or interact with the running UI.
 
 > **Prerequisite**: Set up `$CLI` as described in SKILL.md before running any command.
+> On Windows PowerShell, prefix every `$CLI` call with `&` (e.g. `& $CLI discover`).
 
 ## set-property
 
@@ -149,17 +150,26 @@ $CLI $PID screenshot ./stage.png --stageId $STAGE_ID
 
 ```bash
 # 0. Setup
+# macOS / Linux
 CLI="<path-to-skill>/scripts/fxgraph"
+# Windows PowerShell
+# $CLI = "<path-to-skill>\scripts\fxgraph.bat"
 
 # 1. Discover app and get PID
+# bash
 PID=$($CLI discover | jq '.[0].pid')
+# PowerShell: $PID = (& $CLI discover | jq '.[0].pid')
 
 # 2. Find target node (e.g. first TextField)
+# bash
 NODE_ID=$($CLI $PID scenegraph --props --filter text \
   | jq '.. | select(.type? == "TextField") | .nodeId' | head -1)
+# PowerShell: $NODE_ID = (& $CLI $PID scenegraph --props --filter text `
+#   | jq '.. | select(.type? == "TextField") | .nodeId' | Select-Object -First 1)
 
 # 3. Highlight to confirm the right node
 $CLI $PID select-node $NODE_ID
+# PowerShell: & $CLI $PID select-node $NODE_ID
 
 # 4. Take a before screenshot
 $CLI $PID screenshot ./before.png
