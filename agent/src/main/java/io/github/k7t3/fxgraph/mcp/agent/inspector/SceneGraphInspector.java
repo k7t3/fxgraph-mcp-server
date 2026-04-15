@@ -199,7 +199,136 @@ public class SceneGraphInspector {
     }
 
     // =============================================
-    // SET_PROPERTY
+    // FIND_NODES
+    // =============================================
+
+    @SuppressWarnings("unchecked")
+    public AgentResponse findNodes(Map<String, Object> params) {
+        try {
+            String queryId = params != null ? (String) params.get("id") : null;
+            String queryType = params != null ? (String) params.get("type") : null;
+            String queryText = params != null ? (String) params.get("text") : null;
+            String queryStyleClass = params != null ? (String) params.get("styleClass") : null;
+            String stageId = params != null ? (String) params.get("stageId") : null;
+            int maxResults = params != null && params.get("maxResults") != null
+                    ? ((Number) params.get("maxResults")).intValue() : 100;
+
+            if (queryId == null && queryType == null && queryText == null && queryStyleClass == null) {
+                return AgentResponse.error("At least one search criterion is required: id, type, text, or styleClass");
+            }
+
+            List<Map<String, Object>> matches = runOnFxThread(() ->
+                    collectMatchingNodes(queryId, queryType, queryText, queryStyleClass, stageId, maxResults));
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("nodes", matches);
+            result.put("count", matches.size());
+            return AgentResponse.success(result);
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to find nodes: " + e.getMessage());
+        }
+    }
+
+    private List<Map<String, Object>> collectMatchingNodes(String queryId, String queryType,
+                                                            String queryText, String queryStyleClass,
+                                                            String stageId, int maxResults) {
+        List<Map<String, Object>> matches = new ArrayList<>();
+        ObservableList<Window> windows = Window.getWindows();
+        for (Window window : windows) {
+            if (!(window instanceof Stage stage)) continue;
+            Scene scene = stage.getScene();
+            if (scene == null || scene.getRoot() == null) continue;
+
+            String sid = String.valueOf(System.identityHashCode(stage));
+            if (stageId != null && !stageId.equals(sid)) continue;
+
+            searchMatchingNodes(scene.getRoot(), sid, queryId, queryType, queryText,
+                    queryStyleClass, matches, maxResults);
+            if (matches.size() >= maxResults) break;
+        }
+        return matches;
+    }
+
+    private void searchMatchingNodes(Node node, String stageId, String queryId, String queryType,
+                                      String queryText, String queryStyleClass,
+                                      List<Map<String, Object>> matches, int maxResults) {
+        if (matches.size() >= maxResults) return;
+        if (isInspectorNode(node)) return;
+
+        if (nodeMatches(node, queryId, queryType, queryText, queryStyleClass)) {
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("nodeId", System.identityHashCode(node));
+            String fxId = node.getId();
+            if (fxId != null) info.put("id", fxId);
+            info.put("type", nodeClassName(node));
+            info.put("stageId", stageId);
+            info.put("visible", node.isVisible());
+            List<String> styleClasses = new ArrayList<>(node.getStyleClass());
+            if (!styleClasses.isEmpty()) info.put("styleClass", styleClasses);
+            // Include text/value property if available
+            String textValue = extractTextValue(node);
+            if (textValue != null) info.put("text", textValue);
+            matches.add(info);
+        }
+
+        for (Node child : ChildrenGetter.getChildren(node)) {
+            if (matches.size() >= maxResults) return;
+            searchMatchingNodes(child, stageId, queryId, queryType, queryText,
+                    queryStyleClass, matches, maxResults);
+        }
+    }
+
+    private boolean nodeMatches(Node node, String queryId, String queryType,
+                                 String queryText, String queryStyleClass) {
+        if (queryId != null && !queryId.equals(node.getId())) return false;
+        if (queryType != null && !nodeTypeMatches(node, queryType)) return false;
+        if (queryStyleClass != null && !node.getStyleClass().contains(queryStyleClass)) return false;
+        if (queryText != null) {
+            String text = extractTextValue(node);
+            if (text == null || !text.contains(queryText)) return false;
+        }
+        return true;
+    }
+
+    private boolean nodeTypeMatches(Node node, String queryType) {
+        Class<?> cls = node.getClass();
+        while (cls != null && cls != Object.class) {
+            if (cls.getSimpleName().equalsIgnoreCase(queryType)) return true;
+            cls = cls.getSuperclass();
+        }
+        return false;
+    }
+
+    private String extractTextValue(Node node) {
+        try {
+            Method textMethod = findPublicGetter(node, "text");
+            if (textMethod != null) {
+                Object val = textMethod.invoke(node);
+                if (val instanceof String s) return s;
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return null;
+    }
+
+    private Method findPublicGetter(Node node, String propertyName) {
+        String getter = "get" + Character.toUpperCase(propertyName.charAt(0)) + propertyName.substring(1);
+        Class<?> cls = node.getClass();
+        while (cls != null && cls != Object.class) {
+            try {
+                Method m = cls.getMethod(getter);
+                if (m.getParameterCount() == 0) return m;
+            } catch (NoSuchMethodException e) {
+                // Ignore
+            }
+            cls = cls.getSuperclass();
+        }
+        return null;
+    }
+
+    // =============================================
+
     // =============================================
 
     public AgentResponse setProperty(Map<String, Object> params) {

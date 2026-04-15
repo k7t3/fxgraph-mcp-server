@@ -452,4 +452,73 @@ class FxgraphServiceTest {
         assertFalse((boolean) result.get("success"));
         assertEquals("Node not found: 42", result.get("error"));
     }
+
+    // ===== findNodes =====
+
+    @Test
+    void findNodesWithInvalidSession() {
+        Map<String, Object> result = service.findNodes("invalid", null, "Button", null, null, null, null);
+        assertFalse((boolean) result.get("success"));
+        assertTrue(result.get("error").toString().contains("Session not found"));
+    }
+
+    @Test
+    void findNodesSendsCorrectCommand() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class)))
+                .thenReturn(AgentResponse.success(Map.of("nodes", List.of(), "count", 0)));
+        sessionManager.register("session-1", agent);
+
+        service.findNodes("session-1", "my-id", "Button", "Submit", "primary", "stage-1", 10);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        AgentCommand cmd = captor.getValue();
+        assertEquals(AgentCommand.CommandType.FIND_NODES, cmd.getCommand());
+        assertEquals("my-id", cmd.getParams().get("id"));
+        assertEquals("Button", cmd.getParams().get("type"));
+        assertEquals("Submit", cmd.getParams().get("text"));
+        assertEquals("primary", cmd.getParams().get("styleClass"));
+        assertEquals("stage-1", cmd.getParams().get("stageId"));
+        assertEquals(10, cmd.getParams().get("maxResults"));
+    }
+
+    @Test
+    void findNodesOmitsNullParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class)))
+                .thenReturn(AgentResponse.success(Map.of("nodes", List.of(), "count", 0)));
+        sessionManager.register("session-1", agent);
+
+        service.findNodes("session-1", null, "Label", null, null, null, null);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        var params = captor.getValue().getParams();
+        assertFalse(params.containsKey("id"));
+        assertEquals("Label", params.get("type"));
+        assertFalse(params.containsKey("text"));
+        assertFalse(params.containsKey("styleClass"));
+        assertFalse(params.containsKey("stageId"));
+        assertFalse(params.containsKey("maxResults"));
+    }
+
+    @Test
+    void findNodesReturnsResultData() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        List<Map<String, Object>> nodeList = List.of(
+                Map.of("nodeId", 42, "type", "Button")
+        );
+        when(agent.sendCommand(any(AgentCommand.class)))
+                .thenReturn(AgentResponse.success(Map.of("nodes", nodeList, "count", 1)));
+        sessionManager.register("session-1", agent);
+
+        Map<String, Object> result = service.findNodes("session-1", null, "Button", null, null, null, null);
+        assertTrue((boolean) result.get("success"));
+        assertEquals(1, result.get("count"));
+        assertNotNull(result.get("nodes"));
+    }
 }

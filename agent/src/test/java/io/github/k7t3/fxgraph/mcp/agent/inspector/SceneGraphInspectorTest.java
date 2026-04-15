@@ -559,6 +559,185 @@ class SceneGraphInspectorTest {
         assertEquals("savePath is required", response.getError());
     }
 
+    @Test
+    void findNodes_byId_findsMatchingNode() {
+        SceneGraphInspector inspector = createInspector();
+        Label label = new Label("Hello");
+        label.setId("my-label");
+        runOnFxThread(() -> root.getChildren().setAll(label));
+
+        AgentResponse response = inspector.findNodes(Map.of("id", "my-label"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertEquals(1, nodes.size());
+        assertEquals(System.identityHashCode(label), nodes.get(0).get("nodeId"));
+        assertEquals("my-label", nodes.get(0).get("id"));
+    }
+
+    @Test
+    void findNodes_byId_returnsEmptyWhenNoMatch() {
+        SceneGraphInspector inspector = createInspector();
+        runOnFxThread(() -> root.getChildren().setAll(new Label("x")));
+
+        AgentResponse response = inspector.findNodes(Map.of("id", "nonexistent"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertTrue(nodes.isEmpty());
+        assertEquals(0, data.get("count"));
+    }
+
+    @Test
+    void findNodes_byType_findsAllButtons() {
+        SceneGraphInspector inspector = createInspector();
+        Button btn1 = new Button("A");
+        Button btn2 = new Button("B");
+        Label label = new Label("L");
+        runOnFxThread(() -> root.getChildren().setAll(btn1, btn2, label));
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "Button"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertEquals(2, (int) data.get("count"));
+        assertTrue(nodes.stream().allMatch(n -> "Button".equals(n.get("type"))));
+    }
+
+    @Test
+    void findNodes_byType_isCaseInsensitive() {
+        SceneGraphInspector inspector = createInspector();
+        Button btn = new Button("Go");
+        runOnFxThread(() -> root.getChildren().setAll(btn));
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "button"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertFalse(nodes.isEmpty());
+        assertTrue(nodes.stream().anyMatch(n -> System.identityHashCode(btn) == (int) n.get("nodeId")));
+    }
+
+    @Test
+    void findNodes_byText_findsPartialMatch() {
+        SceneGraphInspector inspector = createInspector();
+        Label label = new Label("Hello World");
+        Button btn = new Button("Hello");
+        runOnFxThread(() -> root.getChildren().setAll(label, btn));
+
+        AgentResponse response = inspector.findNodes(Map.of("text", "Hello"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        // Both the Label and Button (at minimum) should be found
+        int labelId = System.identityHashCode(label);
+        int btnId = System.identityHashCode(btn);
+        assertTrue(nodes.stream().anyMatch(n -> labelId == (int) n.get("nodeId")));
+        assertTrue(nodes.stream().anyMatch(n -> btnId == (int) n.get("nodeId")));
+    }
+
+    @Test
+    void findNodes_byText_returnsTextInResult() {
+        SceneGraphInspector inspector = createInspector();
+        Label label = new Label("Find Me");
+        label.setId("target");
+        runOnFxThread(() -> root.getChildren().setAll(label));
+
+        AgentResponse response = inspector.findNodes(Map.of("id", "target", "text", "Find Me"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertEquals(1, nodes.size());
+        assertEquals("Find Me", nodes.get(0).get("text"));
+    }
+
+    @Test
+    void findNodes_byStyleClass_findsMatchingNodes() {
+        SceneGraphInspector inspector = createInspector();
+        Label label = new Label("Styled");
+        label.getStyleClass().add("my-class");
+        Button btn = new Button("Plain");
+        runOnFxThread(() -> root.getChildren().setAll(label, btn));
+
+        AgentResponse response = inspector.findNodes(Map.of("styleClass", "my-class"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertEquals(1, nodes.size());
+        assertEquals(System.identityHashCode(label), nodes.get(0).get("nodeId"));
+    }
+
+    @Test
+    void findNodes_combinedCriteria_appliesAndLogic() {
+        SceneGraphInspector inspector = createInspector();
+        Button btn1 = new Button("Submit");
+        btn1.getStyleClass().add("primary");
+        Button btn2 = new Button("Cancel");
+        btn2.getStyleClass().add("primary");
+        runOnFxThread(() -> root.getChildren().setAll(btn1, btn2));
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "Button", "text", "Submit"));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertEquals(1, nodes.size());
+        assertEquals(System.identityHashCode(btn1), nodes.get(0).get("nodeId"));
+    }
+
+    @Test
+    void findNodes_maxResults_limitsOutput() {
+        SceneGraphInspector inspector = createInspector();
+        HBox hbox = new HBox();
+        runOnFxThread(() -> {
+            for (int i = 0; i < 10; i++) {
+                hbox.getChildren().add(new Label("Item " + i));
+            }
+            root.getChildren().setAll(hbox);
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "Label", "maxResults", 3));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertEquals(3, nodes.size());
+        assertEquals(3, data.get("count"));
+    }
+
+    @Test
+    void findNodes_requiresAtLeastOneCriterion() {
+        SceneGraphInspector inspector = createInspector();
+        AgentResponse response = inspector.findNodes(Map.of());
+
+        assertFalse(response.isSuccess());
+        assertTrue(response.getError().contains("At least one search criterion"));
+    }
+
+    @Test
+    void findNodes_nullParamsReturnsError() {
+        SceneGraphInspector inspector = createInspector();
+        AgentResponse response = inspector.findNodes(null);
+
+        assertFalse(response.isSuccess());
+    }
+
+    @Test
+    void findNodes_byStageId_restrictsSearch() {
+        SceneGraphInspector inspector = createInspector();
+        Label primaryLabel = new Label("Primary");
+        primaryLabel.setId("primary-label");
+        runOnFxThread(() -> root.getChildren().setAll(primaryLabel));
+
+        Stage extra = createStage(new VBox(new Label("Secondary")), "Secondary");
+        String primaryId = stageId(stage);
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "Label", "stageId", primaryId));
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        List<Map<String, Object>> nodes = castList(data.get("nodes"));
+        assertTrue(nodes.stream().allMatch(n -> primaryId.equals(n.get("stageId"))));
+        assertFalse(nodes.isEmpty());
+    }
+
     private SceneGraphInspector createInspector() {
         try {
             return SceneGraphInspector.class.getConstructor().newInstance();

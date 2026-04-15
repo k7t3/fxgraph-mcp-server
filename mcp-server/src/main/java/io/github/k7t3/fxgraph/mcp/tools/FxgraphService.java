@@ -124,6 +124,28 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.GET_SCENEGRAPH, params));
     }
 
+    @Tool(description = "Search for nodes in the scene graph by criteria. Returns matching nodes with their IDs without requiring full scene graph traversal. Search by CSS id, node type, text content, or style class. Multiple criteria are combined with AND logic.")
+    public Map<String, Object> findNodes(
+            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "CSS fx:id of the node (exact match)", required = false) String id,
+            @ToolParam(description = "Node type/class name to match (e.g. 'Button', 'TextField', 'Label'). Matches against the class hierarchy.", required = false) String type,
+            @ToolParam(description = "Text content to search for (partial match on text/label properties)", required = false) String text,
+            @ToolParam(description = "CSS style class to match (exact match on a single class)", required = false) String styleClass,
+            @ToolParam(description = "Stage ID to restrict search to a specific window (optional)", required = false) String stageId,
+            @ToolParam(description = "Maximum number of results to return (default: 100)", required = false) Integer maxResults) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (id != null) params.put("id", id);
+        if (type != null) params.put("type", type);
+        if (text != null) params.put("text", text);
+        if (styleClass != null) params.put("styleClass", styleClass);
+        if (stageId != null) params.put("stageId", stageId);
+        if (maxResults != null) params.put("maxResults", maxResults);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.FIND_NODES, params));
+    }
+
     @Tool(description = "Get detailed information about a specific node including all its properties, children summary, bounds, style classes, and more. Use the nodeId obtained from getScenegraph. Optionally filter properties with propertyFilter.")
     public Map<String, Object> getNodeDetails(
             @ToolParam(description = "Session ID") String sessionId,

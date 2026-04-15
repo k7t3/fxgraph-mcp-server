@@ -14,6 +14,7 @@ public class AgentCommand {
         GET_STAGES,
         GET_SCENEGRAPH,
         GET_NODE_DETAILS,
+        FIND_NODES,
         SET_PROPERTY,
         SELECT_NODE,
         CLICK_NODE,
