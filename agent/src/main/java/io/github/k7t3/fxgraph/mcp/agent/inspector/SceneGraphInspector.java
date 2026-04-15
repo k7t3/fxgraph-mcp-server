@@ -307,7 +307,7 @@ public class SceneGraphInspector {
                 if (val instanceof String s) return s;
             }
         } catch (Exception e) {
-            // Ignore
+            // Ignore: Node does not have a text property
         }
         return null;
     }
@@ -320,7 +320,7 @@ public class SceneGraphInspector {
                 Method m = cls.getMethod(getter);
                 if (m.getParameterCount() == 0) return m;
             } catch (NoSuchMethodException e) {
-                // Ignore
+                // Ignore: method not found in this class, will check superclass
             }
             cls = cls.getSuperclass();
         }
@@ -328,7 +328,7 @@ public class SceneGraphInspector {
     }
 
     // =============================================
-
+    // SET_PROPERTY
     // =============================================
 
     public AgentResponse setProperty(Map<String, Object> params) {
