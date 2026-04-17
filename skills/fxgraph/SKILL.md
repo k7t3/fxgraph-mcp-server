@@ -140,9 +140,10 @@ $CLI $PID click-node $NODE_ID
 $CLI $PID focus $NODE_ID
 $CLI $PID type-key ENTER
 
-# Screenshot
+# Screenshot (default max size: 1280x720)
 $CLI $PID screenshot ./result.png
 $CLI $PID screenshot ./node.png --nodeId $NODE_ID
+$CLI $PID screenshot ./full.png --maxWidth 1920 --maxHeight 1080
 
 # Clear highlight
 $CLI $PID select-node 0

@@ -217,12 +217,16 @@ public class FxgraphService {
             @ToolParam(description = "Session ID") String sessionId,
             @ToolParam(description = "Target node ID (optional; if omitted, captures full scene graph)", required = false) Integer nodeId,
             @ToolParam(description = "Stage ID for full scene graph capture (optional)", required = false) String stageId,
-            @ToolParam(description = "Path to save the PNG screenshot") String savePath) {
+            @ToolParam(description = "Path to save the PNG screenshot") String savePath,
+            @ToolParam(description = "Maximum width for the screenshot (default: 1280)", required = false) Integer maxWidth,
+            @ToolParam(description = "Maximum height for the screenshot (default: 720)", required = false) Integer maxHeight) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         if (nodeId != null) params.put("nodeId", nodeId);
         if (stageId != null) params.put("stageId", stageId);
         params.put("savePath", savePath);
+        if (maxWidth != null) params.put("maxWidth", maxWidth);
+        if (maxHeight != null) params.put("maxHeight", maxHeight);
 
         return sendAgentCommand(sessionId,
                 new AgentCommand(AgentCommand.CommandType.TAKE_SCREENSHOT, params));

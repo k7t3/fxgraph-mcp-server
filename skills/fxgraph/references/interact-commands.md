@@ -123,7 +123,7 @@ $CLI $PID type-key TAB --nodeId $NODE_ID
 Capture a PNG of a node, a specific stage, or the full scene.
 
 ```bash
-# Full scene of the primary window
+# Full scene of the primary window (default max: 1280x720)
 $CLI $PID screenshot ./screenshot.png
 
 # Specific node
@@ -131,18 +131,30 @@ $CLI $PID screenshot ./node.png --nodeId $NODE_ID
 
 # Specific stage
 $CLI $PID screenshot ./stage.png --stageId $STAGE_ID
+
+# Custom maximum dimensions (scales proportionally if exceeded)
+$CLI $PID screenshot ./hd.png --maxWidth 1920 --maxHeight 1080
+$CLI $PID screenshot ./small.png --maxWidth 640 --maxHeight 480
 ```
 
 **Output:**
 ```json
 {
   "success": true,
-  "path": "./screenshot.png"
+  "savedPath": "./screenshot.png",
+  "width": 1280,
+  "height": 720,
+  "mimeType": "image/png",
+  "targetType": "scenegraph",
+  "targetId": "123456"
 }
 ```
 
 - Output format is always PNG.
 - The path is relative to the working directory of the CLI process.
+- **Default max size is 1280x720 (HD).** Images exceeding these limits are scaled down proportionally.
+- `--maxWidth` and `--maxHeight` are optional. Set both to override the default HD limit.
+- Aspect ratio is always preserved during scaling.
 
 ---
 
@@ -171,7 +183,7 @@ NODE_ID=$($CLI $PID scenegraph --props --filter text \
 $CLI $PID select-node $NODE_ID
 # PowerShell: & $CLI $PID select-node $NODE_ID
 
-# 4. Take a before screenshot
+# 4. Take a before screenshot (auto-scaled to HD by default)
 $CLI $PID screenshot ./before.png
 
 # 5. Set property directly

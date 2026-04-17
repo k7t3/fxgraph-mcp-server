@@ -26,8 +26,11 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.IntBuffer;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,6 +46,9 @@ import java.util.concurrent.TimeUnit;
 public class SceneGraphInspector {
 
     private static final String SPACE_CHAR = " ";
+
+    private static final int DEFAULT_SCREENSHOT_MAX_WIDTH = 1280;
+    private static final int DEFAULT_SCREENSHOT_MAX_HEIGHT = 720;
 
     /** Tracks highlighted overlay nodes so they can be removed. */
     private Node currentHighlight;
@@ -389,7 +395,10 @@ public class SceneGraphInspector {
                 return AgentResponse.error("savePath is required");
             }
 
-            Map<String, Object> screenshot = runOnFxThread(() -> doTakeScreenshot(nodeId, stageId, savePath));
+            int maxWidth = extractMaxDimension(params, "maxWidth", DEFAULT_SCREENSHOT_MAX_WIDTH);
+            int maxHeight = extractMaxDimension(params, "maxHeight", DEFAULT_SCREENSHOT_MAX_HEIGHT);
+
+            Map<String, Object> screenshot = runOnFxThread(() -> doTakeScreenshot(nodeId, stageId, savePath, maxWidth, maxHeight));
             if (screenshot == null) {
                 if (nodeId != null) {
                     return AgentResponse.error("Node not found: " + nodeId);
@@ -400,6 +409,13 @@ public class SceneGraphInspector {
         } catch (Exception e) {
             return AgentResponse.error("Failed to take screenshot: " + e.getMessage());
         }
+    }
+
+    private int extractMaxDimension(Map<String, Object> params, String key, int defaultValue) {
+        if (params == null || params.get(key) == null) {
+            return defaultValue;
+        }
+        return ((Number) params.get(key)).intValue();
     }
 
     private String doClickNode(int nodeId) {
@@ -474,7 +490,7 @@ public class SceneGraphInspector {
         return null;
     }
 
-    private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId, String savePath) {
+    private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId, String savePath, int maxWidth, int maxHeight) {
         WritableImage image;
         String targetType;
         String targetId;
@@ -493,6 +509,7 @@ public class SceneGraphInspector {
             targetId = String.valueOf(System.identityHashCode(stage));
         }
 
+        image = scaleImage(image, maxWidth, maxHeight);
         String savedPath = savePng(image, Paths.get(savePath));
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -516,6 +533,47 @@ public class SceneGraphInspector {
             }
         }
         return null;
+    }
+
+    private WritableImage scaleImage(WritableImage image, int maxWidth, int maxHeight) {
+        int width = (int) image.getWidth();
+        int height = (int) image.getHeight();
+        double scale = Math.min(Math.min(maxWidth / (double) width, maxHeight / (double) height), 1.0);
+        if (scale >= 1.0) return image;
+
+        int newWidth = (int) (width * scale);
+        int newHeight = (int) (height * scale);
+
+        BufferedImage src = toBufferedImage(image);
+        BufferedImage dst = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = dst.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.drawImage(src, 0, 0, newWidth, newHeight, null);
+        g.dispose();
+
+        return toWritableImage(dst);
+    }
+
+    private BufferedImage toBufferedImage(WritableImage image) {
+        int width = (int) image.getWidth();
+        int height = (int) image.getHeight();
+        BufferedImage buffered = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        PixelReader reader = image.getPixelReader();
+        int[] argb = new int[width * height];
+        reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), argb, 0, width);
+        buffered.setRGB(0, 0, width, height, argb, 0, width);
+        return buffered;
+    }
+
+    private WritableImage toWritableImage(BufferedImage buffered) {
+        WritableImage image = new WritableImage(buffered.getWidth(), buffered.getHeight());
+        WritablePixelFormat<IntBuffer> format = WritablePixelFormat.getIntArgbInstance();
+        int[] pixels = new int[buffered.getWidth() * buffered.getHeight()];
+        buffered.getRGB(0, 0, buffered.getWidth(), buffered.getHeight(), pixels, 0, buffered.getWidth());
+        image.getPixelWriter().setPixels(0, 0, buffered.getWidth(), buffered.getHeight(), format, pixels, 0, buffered.getWidth());
+        return image;
     }
 
     private String savePng(WritableImage image, Path outputPath) {

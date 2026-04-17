@@ -398,7 +398,7 @@ class FxgraphServiceTest {
         when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/a.png")));
         sessionManager.register("session-1", agent);
 
-        service.takeScreenshot("session-1", 88, null, "/tmp/a.png");
+        service.takeScreenshot("session-1", 88, null, "/tmp/a.png", null, null);
 
         var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
         verify(agent).sendCommand(captor.capture());
@@ -406,6 +406,8 @@ class FxgraphServiceTest {
         assertEquals(88, captor.getValue().getParams().get("nodeId"));
         assertFalse(captor.getValue().getParams().containsKey("stageId"));
         assertEquals("/tmp/a.png", captor.getValue().getParams().get("savePath"));
+        assertFalse(captor.getValue().getParams().containsKey("maxWidth"));
+        assertFalse(captor.getValue().getParams().containsKey("maxHeight"));
     }
 
     @Test
@@ -415,7 +417,7 @@ class FxgraphServiceTest {
         when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/b.png")));
         sessionManager.register("session-1", agent);
 
-        service.takeScreenshot("session-1", null, "stage-1", "/tmp/b.png");
+        service.takeScreenshot("session-1", null, "stage-1", "/tmp/b.png", null, null);
 
         var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
         verify(agent).sendCommand(captor.capture());
@@ -423,6 +425,26 @@ class FxgraphServiceTest {
         assertEquals("stage-1", captor.getValue().getParams().get("stageId"));
         assertFalse(captor.getValue().getParams().containsKey("nodeId"));
         assertEquals("/tmp/b.png", captor.getValue().getParams().get("savePath"));
+        assertFalse(captor.getValue().getParams().containsKey("maxWidth"));
+        assertFalse(captor.getValue().getParams().containsKey("maxHeight"));
+    }
+
+    @Test
+    void takeScreenshotWithMaxDimensionsSendsCorrectParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/c.png")));
+        sessionManager.register("session-1", agent);
+
+        service.takeScreenshot("session-1", 88, "stage-1", "/tmp/c.png", 640, 480);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
+        assertEquals(88, captor.getValue().getParams().get("nodeId"));
+        assertEquals("stage-1", captor.getValue().getParams().get("stageId"));
+        assertEquals(640, captor.getValue().getParams().get("maxWidth"));
+        assertEquals(480, captor.getValue().getParams().get("maxHeight"));
     }
 
     // ===== Agent communication error handling =====

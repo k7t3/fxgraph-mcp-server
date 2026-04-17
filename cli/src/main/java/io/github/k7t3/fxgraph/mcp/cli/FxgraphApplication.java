@@ -68,8 +68,8 @@ public class FxgraphApplication {
         System.err.println("  fxgraph <pid> type-key <key> [--nodeId N]");
         System.err.println("      Type a key (e.g. 'a', 'ENTER') into a node or the focused node.");
         System.err.println();
-        System.err.println("  fxgraph <pid> screenshot <outputPath> [--nodeId N] [--stageId S]");
-        System.err.println("      Save a PNG screenshot of a node or the full scene.");
+        System.err.println("  fxgraph <pid> screenshot <outputPath> [--nodeId N] [--stageId S] [--maxWidth W] [--maxHeight H]");
+        System.err.println("      Save a PNG screenshot of a node or the full scene. Default max size: 1280x720.");
         System.err.println();
         System.err.println("All output is JSON. Errors are written to stderr (exit code 1).");
     }

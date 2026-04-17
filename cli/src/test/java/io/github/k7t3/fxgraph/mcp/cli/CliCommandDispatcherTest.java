@@ -409,6 +409,31 @@ class CliCommandDispatcherTest {
         assertEquals("s1", cmd.getParams().get("stageId"));
     }
 
+    @Test
+    void screenshotWithMaxWidth() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "screenshot", "/tmp/t.png", "--maxWidth", "800"});
+        AgentCommand cmd = captureCommand();
+        assertEquals(800, cmd.getParams().get("maxWidth"));
+    }
+
+    @Test
+    void screenshotWithMaxHeight() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "screenshot", "/tmp/t.png", "--maxHeight", "600"});
+        AgentCommand cmd = captureCommand();
+        assertEquals(600, cmd.getParams().get("maxHeight"));
+    }
+
+    @Test
+    void screenshotWithBothMaxDimensions() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "screenshot", "/tmp/t.png", "--maxWidth", "640", "--maxHeight", "480"});
+        AgentCommand cmd = captureCommand();
+        assertEquals(640, cmd.getParams().get("maxWidth"));
+        assertEquals(480, cmd.getParams().get("maxHeight"));
+    }
+
     // ===================================================
     // Helpers
     // ===================================================

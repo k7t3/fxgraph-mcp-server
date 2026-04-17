@@ -5,6 +5,7 @@ import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
 import javafx.scene.control.Button;
 import javafx.scene.Group;
 import javafx.scene.control.Label;
@@ -14,6 +15,7 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.AfterEach;
@@ -557,6 +559,170 @@ class SceneGraphInspectorTest {
 
         assertFalse(response.isSuccess());
         assertEquals("savePath is required", response.getError());
+    }
+
+    @Test
+    void takeScreenshot_scalesWhenExceedsMaxWidth() {
+        SceneGraphInspector inspector = createInspector();
+        Canvas canvas = new Canvas(1920, 500);
+        runOnFxThread(() -> {
+            var gc = canvas.getGraphicsContext2D();
+            gc.setFill(Color.RED);
+            gc.fillRect(0, 0, 1920, 500);
+            root.getChildren().setAll(canvas);
+        });
+        int nodeId = System.identityHashCode(canvas);
+        Path output = tempPngPath("scale-width");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "nodeId", nodeId,
+                "savePath", output.toString(),
+                "maxWidth", 800,
+                "maxHeight", 600
+        ));
+
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        int width = ((Number) data.get("width")).intValue();
+        int height = ((Number) data.get("height")).intValue();
+        assertTrue(width <= 800, "width should be <= 800 but was " + width);
+        assertTrue(height <= 600, "height should be <= 600 but was " + height);
+        double expectedScale = Math.min(800.0 / 1920.0, 600.0 / 500.0);
+        int expectedWidth = (int) (1920 * expectedScale);
+        int expectedHeight = (int) (500 * expectedScale);
+        assertEquals(expectedWidth, width);
+        assertEquals(expectedHeight, height);
+    }
+
+    @Test
+    void takeScreenshot_scalesWhenExceedsMaxHeight() {
+        SceneGraphInspector inspector = createInspector();
+        Canvas canvas = new Canvas(400, 1200);
+        runOnFxThread(() -> {
+            var gc = canvas.getGraphicsContext2D();
+            gc.setFill(Color.BLUE);
+            gc.fillRect(0, 0, 400, 1200);
+            root.getChildren().setAll(canvas);
+        });
+        int nodeId = System.identityHashCode(canvas);
+        Path output = tempPngPath("scale-height");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "nodeId", nodeId,
+                "savePath", output.toString(),
+                "maxWidth", 800,
+                "maxHeight", 600
+        ));
+
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        int width = ((Number) data.get("width")).intValue();
+        int height = ((Number) data.get("height")).intValue();
+        assertTrue(width <= 800, "width should be <= 800 but was " + width);
+        assertTrue(height <= 600, "height should be <= 600 but was " + height);
+        double expectedScale = Math.min(800.0 / 400.0, 600.0 / 1200.0);
+        int expectedWidth = (int) (400 * expectedScale);
+        int expectedHeight = (int) (1200 * expectedScale);
+        assertEquals(expectedWidth, width);
+        assertEquals(expectedHeight, height);
+    }
+
+    @Test
+    void takeScreenshot_noScaleWhenWithinLimits() {
+        SceneGraphInspector inspector = createInspector();
+        Rectangle rect = new Rectangle(100, 80);
+        runOnFxThread(() -> root.getChildren().setAll(rect));
+        int nodeId = System.identityHashCode(rect);
+        Path output = tempPngPath("no-scale");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "nodeId", nodeId,
+                "savePath", output.toString(),
+                "maxWidth", 800,
+                "maxHeight", 600
+        ));
+
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        int width = ((Number) data.get("width")).intValue();
+        int height = ((Number) data.get("height")).intValue();
+        assertEquals(100, width);
+        assertEquals(80, height);
+    }
+
+    @Test
+    void takeScreenshot_preservesAspectRatio() {
+        SceneGraphInspector inspector = createInspector();
+        Canvas canvas = new Canvas(1920, 1080);
+        runOnFxThread(() -> {
+            var gc = canvas.getGraphicsContext2D();
+            gc.setFill(Color.GREEN);
+            gc.fillRect(0, 0, 1920, 1080);
+            root.getChildren().setAll(canvas);
+        });
+        int nodeId = System.identityHashCode(canvas);
+        Path output = tempPngPath("aspect-ratio");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "nodeId", nodeId,
+                "savePath", output.toString(),
+                "maxWidth", 640,
+                "maxHeight", 480
+        ));
+
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        int width = ((Number) data.get("width")).intValue();
+        int height = ((Number) data.get("height")).intValue();
+        double originalRatio = 1920.0 / 1080.0;
+        double resultRatio = (double) width / height;
+        assertTrue(Math.abs(originalRatio - resultRatio) < 0.01,
+                "Aspect ratio should be preserved: expected ~" + originalRatio + " but was " + resultRatio);
+    }
+
+    @Test
+    void takeScreenshot_usesDefaultHdLimits() {
+        SceneGraphInspector inspector = createInspector();
+        Canvas canvas = new Canvas(1920, 1080);
+        runOnFxThread(() -> {
+            var gc = canvas.getGraphicsContext2D();
+            gc.setFill(Color.ORANGE);
+            gc.fillRect(0, 0, 1920, 1080);
+            root.getChildren().setAll(canvas);
+        });
+        int nodeId = System.identityHashCode(canvas);
+        Path output = tempPngPath("default-hd");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "nodeId", nodeId,
+                "savePath", output.toString()
+        ));
+
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        int width = ((Number) data.get("width")).intValue();
+        int height = ((Number) data.get("height")).intValue();
+        assertTrue(width <= 1280, "width should be <= 1280 but was " + width);
+        assertTrue(height <= 720, "height should be <= 720 but was " + height);
+    }
+
+    @Test
+    void takeScreenshot_scalesStageWhenExceedsHd() {
+        SceneGraphInspector inspector = createInspector();
+        Stage testStage = createStage(new Group(), "TestStage");
+        String sid = stageId(testStage);
+
+        runOnFxThread(() -> {
+            testStage.setScene(new Scene(new Group(), 1920, 1080));
+        });
+
+        Path output = tempPngPath("stage-scale");
+        AgentResponse response = inspector.takeScreenshot(Map.of(
+                "stageId", sid,
+                "savePath", output.toString()
+        ));
+
+        assertTrue(response.isSuccess());
+        Map<String, Object> data = castMap(response.getData());
+        int width = ((Number) data.get("width")).intValue();
+        int height = ((Number) data.get("height")).intValue();
+        assertTrue(width <= 1280, "width should be <= 1280 but was " + width);
+        assertTrue(height <= 720, "height should be <= 720 but was " + height);
     }
 
     private SceneGraphInspector createInspector() {

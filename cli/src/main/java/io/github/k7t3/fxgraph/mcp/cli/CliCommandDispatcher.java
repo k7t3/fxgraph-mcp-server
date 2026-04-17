@@ -263,10 +263,14 @@ public class CliCommandDispatcher {
         params.put("savePath", savePath);
         for (int i = 2; i < args.length; i++) {
             switch (args[i]) {
-                case "--nodeId"  -> params.put("nodeId",
+                case "--nodeId"   -> params.put("nodeId",
                         Integer.parseInt(requireNext(args, ++i, "--nodeId")));
-                case "--stageId" -> params.put("stageId", requireNext(args, ++i, "--stageId"));
-                default          -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
+                case "--stageId"  -> params.put("stageId", requireNext(args, ++i, "--stageId"));
+                case "--maxWidth" -> params.put("maxWidth",
+                        Integer.parseInt(requireNext(args, ++i, "--maxWidth")));
+                case "--maxHeight" -> params.put("maxHeight",
+                        Integer.parseInt(requireNext(args, ++i, "--maxHeight")));
+                default           -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         AgentResponse resp = agent.sendCommand(
