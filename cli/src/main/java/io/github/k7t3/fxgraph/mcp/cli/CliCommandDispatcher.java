@@ -55,7 +55,7 @@ public class CliCommandDispatcher {
         if (args.length < 2) {
             return CliJsonOutput.failure(
                     "No command specified after PID " + pid
-                    + ". Available commands: stages, scenegraph, node-details, set-property,"
+                    + ". Available commands: stages, scenegraph, node-details, find-nodes, set-property,"
                     + " select-node, click-node, focus, type-key, screenshot");
         }
 
@@ -99,6 +99,7 @@ public class CliCommandDispatcher {
                 case "stages"       -> cmdStages(agent);
                 case "scenegraph"   -> cmdScenegraph(agent, args);
                 case "node-details" -> cmdNodeDetails(agent, args);
+                case "find-nodes"   -> cmdFindNodes(agent, args);
                 case "set-property" -> cmdSetProperty(agent, args);
                 case "select-node"  -> cmdSelectNode(agent, args);
                 case "click-node"   -> cmdClickNode(agent, args);
@@ -164,6 +165,24 @@ public class CliCommandDispatcher {
         }
         AgentResponse resp = agent.sendCommand(
                 new AgentCommand(AgentCommand.CommandType.GET_NODE_DETAILS, params));
+        return outputResponse(resp);
+    }
+
+    private static int cmdFindNodes(JavaFxAgent agent, String[] args) throws Exception {
+        Map<String, Object> params = new LinkedHashMap<>();
+        for (int i = 1; i < args.length; i++) {
+            switch (args[i]) {
+                case "--type"      -> params.put("type", requireNext(args, ++i, "--type"));
+                case "--id"        -> params.put("id", requireNext(args, ++i, "--id"));
+                case "--text"      -> params.put("text", requireNext(args, ++i, "--text"));
+                case "--styleClass"-> params.put("styleClass", requireNext(args, ++i, "--styleClass"));
+                case "--stageId"   -> params.put("stageId", requireNext(args, ++i, "--stageId"));
+                default            -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
+            }
+        }
+        AgentResponse resp = agent.sendCommand(
+                new AgentCommand(AgentCommand.CommandType.FIND_NODES,
+                        params.isEmpty() ? null : params));
         return outputResponse(resp);
     }
 

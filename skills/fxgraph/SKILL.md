@@ -55,6 +55,21 @@ If `fxgraph-cli.jar` is missing, build it first — see `skills/README.md`.
 > This produces hundreds of lines of noise. Always use `--filter prop1,prop2` to specify
 > exactly which properties you need.
 
+## Running a JavaFX Application
+
+Start the JavaFX application in the background with output redirected to a log file:
+
+```bash
+mkdir -p logs && ./gradlew run > logs/run.log 2>&1 &
+```
+
+This runs the app as a background process while capturing both stdout and stderr to `logs/run.log`.
+After starting, use `discover` to find the running process:
+
+```bash
+$CLI discover
+```
+
 ## Typical workflow
 
 ### Step 1 — Discover the target application
@@ -103,6 +118,26 @@ Each node: `{ nodeId, type, id?, visible?, styleClass?, bounds?, properties? }`.
 
 ### Step 4 — Find a specific node
 
+**Preferred**: Use `find-nodes` to search by type, id, text, or style class instead of traversing the entire scene graph.
+
+```bash
+# Find all Buttons
+$CLI $PID find-nodes --type Button
+
+# Find node by CSS id
+$CLI $PID find-nodes --id submitBtn
+
+# Find nodes by text content
+$CLI $PID find-nodes --text "Submit"
+
+# Find nodes by style class
+$CLI $PID find-nodes --styleClass primary-action
+
+# Combine filters
+$CLI $PID find-nodes --type Button --text "Submit" --stageId <STAGE_ID>
+```
+
+**Fallback** (when `find-nodes` is unavailable):
 ```bash
 # All Buttons with their text
 # Note: properties is an array [{name, value, ...}], not a flat object

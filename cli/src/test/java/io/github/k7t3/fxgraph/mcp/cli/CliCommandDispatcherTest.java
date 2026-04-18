@@ -245,6 +245,76 @@ class CliCommandDispatcherTest {
     }
 
     // ===================================================
+    // find-nodes
+    // ===================================================
+
+    @Test
+    void findNodesNoOptionsReturnsAllNodes() throws Exception {
+        successResponse();
+        int code = dispatcher.dispatch(new String[]{"12345", "find-nodes"});
+        assertEquals(0, code);
+        AgentCommand cmd = captureCommand();
+        assertEquals(AgentCommand.CommandType.FIND_NODES, cmd.getCommand());
+        assertNull(cmd.getParams());
+    }
+
+    @Test
+    void findNodesWithTypeFilter() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "find-nodes", "--type", "Button"});
+        AgentCommand cmd = captureCommand();
+        assertEquals("Button", cmd.getParams().get("type"));
+    }
+
+    @Test
+    void findNodesWithIdFilter() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "find-nodes", "--id", "submitBtn"});
+        AgentCommand cmd = captureCommand();
+        assertEquals("submitBtn", cmd.getParams().get("id"));
+    }
+
+    @Test
+    void findNodesWithTextFilter() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "find-nodes", "--text", "Submit"});
+        AgentCommand cmd = captureCommand();
+        assertEquals("Submit", cmd.getParams().get("text"));
+    }
+
+    @Test
+    void findNodesWithStyleClassFilter() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "find-nodes", "--styleClass", "primary-action"});
+        AgentCommand cmd = captureCommand();
+        assertEquals("primary-action", cmd.getParams().get("styleClass"));
+    }
+
+    @Test
+    void findNodesWithStageId() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "find-nodes", "--stageId", "stage-123"});
+        AgentCommand cmd = captureCommand();
+        assertEquals("stage-123", cmd.getParams().get("stageId"));
+    }
+
+    @Test
+    void findNodesWithMultipleFilters() throws Exception {
+        successResponse();
+        dispatcher.dispatch(new String[]{"12345", "find-nodes", "--type", "Button", "--text", "Submit", "--stageId", "s1"});
+        AgentCommand cmd = captureCommand();
+        assertEquals("Button", cmd.getParams().get("type"));
+        assertEquals("Submit", cmd.getParams().get("text"));
+        assertEquals("s1", cmd.getParams().get("stageId"));
+    }
+
+    @Test
+    void findNodesUnknownOptionReturnsFailure() throws Exception {
+        int code = dispatcher.dispatch(new String[]{"12345", "find-nodes", "--unknown"});
+        assertEquals(1, code);
+    }
+
+    // ===================================================
     // set-property
     // ===================================================
 

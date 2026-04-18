@@ -138,6 +138,26 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.GET_NODE_DETAILS, params));
     }
 
+    @Tool(description = "Search for nodes in the JavaFX scene graph by type, CSS id, text content, or style class. Returns a list of matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.")
+    public Map<String, Object> findNodes(
+            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "JavaFX class name to filter (e.g., 'Button', 'TextField'). Omit to match all types.", required = false) String type,
+            @ToolParam(description = "CSS id (fx:id) to match exactly. Omit to match all ids.", required = false) String id,
+            @ToolParam(description = "Text content to search for (case-sensitive contains match). Omit to match all text.", required = false) String text,
+            @ToolParam(description = "Style class name to filter. Omit to match all style classes.", required = false) String styleClass,
+            @ToolParam(description = "Stage ID to limit search to a specific window. Omit to search all windows.", required = false) String stageId) {
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (type != null) params.put("type", type);
+        if (id != null) params.put("id", id);
+        if (text != null) params.put("text", text);
+        if (styleClass != null) params.put("styleClass", styleClass);
+        if (stageId != null) params.put("stageId", stageId);
+
+        return sendAgentCommand(sessionId,
+                new AgentCommand(AgentCommand.CommandType.FIND_NODES, params));
+    }
+
     // ===================================================
     // Node Manipulation
     // ===================================================

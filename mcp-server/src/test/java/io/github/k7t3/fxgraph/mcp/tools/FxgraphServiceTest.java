@@ -6,6 +6,7 @@ import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentCommand;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import io.github.k7t3.fxgraph.mcp.model.JavaFxApplication;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -224,6 +225,54 @@ class FxgraphServiceTest {
         assertEquals(AgentCommand.CommandType.GET_NODE_DETAILS, captor.getValue().getCommand());
         assertEquals(99999, captor.getValue().getParams().get("nodeId"));
         assertEquals(List.of("text"), captor.getValue().getParams().get("propertyFilter"));
+    }
+
+    // ===== findNodes =====
+
+    @Test
+    @DisplayName("Should return error when session is invalid")
+    void findNodesWithInvalidSession() {
+        Map<String, Object> result = service.findNodes("invalid", "Button", null, null, null, null);
+        assertFalse((boolean) result.get("success"));
+    }
+
+    @Test
+    @DisplayName("Should return found nodes when session is valid")
+    void findNodesSuccess() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        List<Map<String, Object>> nodes = List.of(
+                Map.of("nodeId", 12345, "type", "Button", "id", "submitBtn", "text", "Submit", "visible", true)
+        );
+        when(agent.sendCommand(any(AgentCommand.class)))
+                .thenReturn(AgentResponse.success(nodes));
+        sessionManager.register("session-1", agent);
+
+        Map<String, Object> result = service.findNodes("session-1", "Button", null, null, null, null);
+        assertTrue((boolean) result.get("success"));
+        assertNotNull(result.get("data"));
+    }
+
+    @Test
+    @DisplayName("Should send correct params to agent")
+    void findNodesSendsCorrectParams() throws Exception {
+        JavaFxAgent agent = mock(JavaFxAgent.class);
+        when(agent.isConnected()).thenReturn(true);
+        when(agent.sendCommand(any(AgentCommand.class)))
+                .thenReturn(AgentResponse.success(List.of()));
+        sessionManager.register("session-1", agent);
+
+        service.findNodes("session-1", "TextField", "usernameField", "Enter", null, "stage-123");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        AgentCommand cmd = captor.getValue();
+        assertEquals(AgentCommand.CommandType.FIND_NODES, cmd.getCommand());
+        assertEquals("TextField", cmd.getParams().get("type"));
+        assertEquals("usernameField", cmd.getParams().get("id"));
+        assertEquals("Enter", cmd.getParams().get("text"));
+        assertEquals("stage-123", cmd.getParams().get("stageId"));
+        assertFalse(cmd.getParams().containsKey("styleClass"));
     }
 
     // ===== setProperty =====

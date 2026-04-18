@@ -118,6 +118,7 @@ public class FxGraphInspectorAgent {
             case GET_STAGES -> inspector.getStages();
             case GET_SCENEGRAPH -> inspector.getScenegraph(command.getParams());
             case GET_NODE_DETAILS -> inspector.getNodeDetails(command.getParams());
+            case FIND_NODES -> inspector.findNodes(command.getParams());
             case SET_PROPERTY -> inspector.setProperty(command.getParams());
             case SELECT_NODE -> inspector.selectNode(command.getParams());
             case CLICK_NODE -> inspector.clickNode(command.getParams());

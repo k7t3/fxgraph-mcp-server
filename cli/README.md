@@ -44,25 +44,53 @@ java -jar fxgraph-cli.jar <pid> <command> [params-json]
 
 | コマンド | 説明 | パラメータ |
 |---------|------|-----------|
-| `connect` | 指定 PID の JavaFX アプリに接続し sessionId を返す | — |
-| `disconnect` | 接続を切断する | `{"sessionId":"..."}` |
-| `getStages` | Stage（ウィンドウ）一覧を取得 | `{"sessionId":"..."}` |
-| `getScenegraph` | シーングラフツリーを取得 | `{"sessionId":"...","stageId":"...","depth":5}` |
-| `getNodeDetails` | 指定ノードの詳細プロパティを取得 | `{"sessionId":"...","nodeId":12345}` |
-| `setProperty` | ノードのプロパティを変更 | `{"sessionId":"...","nodeId":12345,"propertyName":"text","value":"hello"}` |
-| `selectNode` | ノードをハイライト表示 | `{"sessionId":"...","nodeId":12345}` |
-| `clickNode` | ノードをクリック | `{"sessionId":"...","nodeId":12345}` |
-| `requestFocus` | ノードにフォーカスを当てる | `{"sessionId":"...","nodeId":12345}` |
-| `typeKey` | キー入力を送信 | `{"sessionId":"...","key":"ENTER"}` |
-| `takeScreenshot` | スクリーンショットを保存 | `{"sessionId":"...","savePath":"/tmp/shot.png"}` |
+| `stages` | Stage（ウィンドウ）一覧を取得 | — |
+| `scenegraph` | シーングラフツリーを取得 | `--depth N`, `--bounds`, `--props`, `--filter`, `--stageId` |
+| `node-details` | 指定ノードの詳細プロパティを取得 | `<nodeId>`, `--filter` |
+| `find-nodes` | タイプ・ID・テキスト・スタイルクラスからノードを検索 | `--type`, `--id`, `--text`, `--styleClass`, `--stageId` |
+| `set-property` | ノードのプロパティを変更 | `<nodeId> <property> <value>`, `--type` |
+| `select-node` | ノードをハイライト表示 | `<nodeId>`, `--no-bounds` |
+| `click-node` | ノードをクリック | `<nodeId>` |
+| `focus` | ノードにフォーカスを当てる | `<nodeId>` |
+| `type-key` | キー入力を送信 | `<key>`, `--nodeId` |
+| `screenshot` | スクリーンショットを保存 | `<path>`, `--nodeId`, `--stageId`, `--maxWidth`, `--maxHeight` |
 
 ### 使用例
 
 ```bash
-PID=$(java -jar fxgraph-cli.jar discover | jq -r '.[0].pid')
-SESSION=$(java -jar fxgraph-cli.jar $PID connect | jq -r '.sessionId')
-java -jar fxgraph-cli.jar $PID getScenegraph "{\"sessionId\":\"$SESSION\",\"depth\":3}"
-java -jar fxgraph-cli.jar $PID disconnect "{\"sessionId\":\"$SESSION\"}"
+# ノードを検索（タイプ指定）
+java -jar fxgraph-cli.jar $PID find-nodes --type Button
+
+# ノードを検索（ID指定）
+java -jar fxgraph-cli.jar $PID find-nodes --id submitBtn
+
+# ノードを検索（テキスト指定）
+java -jar fxgraph-cli.jar $PID find-nodes --text "Submit"
+
+# ノードを検索（スタイルクラス指定）
+java -jar fxgraph-cli.jar $PID find-nodes --styleClass primary-action
+
+# シーングラフを取得（深さ 3、テキストプロパティ付き）
+java -jar fxgraph-cli.jar $PID scenegraph --depth 3 --props --filter text
+
+# ノードの詳細プロパティを取得（--filter 必須）
+java -jar fxgraph-cli.jar $PID node-details $NODE_ID --filter text,visible,disable
+
+# プロパティを変更
+java -jar fxgraph-cli.jar $PID set-property $NODE_ID text "Hello"
+java -jar fxgraph-cli.jar $PID set-property $NODE_ID visible false --type boolean
+
+# ノードをハイライト
+java -jar fxgraph-cli.jar $PID select-node $NODE_ID
+
+# クリック・フォーカス・キー入力
+java -jar fxgraph-cli.jar $PID click-node $NODE_ID
+java -jar fxgraph-cli.jar $PID focus $NODE_ID
+java -jar fxgraph-cli.jar $PID type-key ENTER
+
+# スクリーンショット
+java -jar fxgraph-cli.jar $PID screenshot ./result.png
+java -jar fxgraph-cli.jar $PID screenshot ./node.png --nodeId $NODE_ID
 ```
 
 ## 出力形式

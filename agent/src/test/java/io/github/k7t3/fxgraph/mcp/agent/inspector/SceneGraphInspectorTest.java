@@ -9,7 +9,9 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.control.Button;
 import javafx.scene.Group;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.PasswordField;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
@@ -19,6 +21,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.testfx.framework.junit5.ApplicationExtension;
@@ -723,6 +726,188 @@ class SceneGraphInspectorTest {
         int height = ((Number) data.get("height")).intValue();
         assertTrue(width <= 1280, "width should be <= 1280 but was " + width);
         assertTrue(height <= 720, "height should be <= 720 but was " + height);
+    }
+
+    @Test
+    @DisplayName("Should find nodes by type")
+    void shouldFindNodesByType() {
+        SceneGraphInspector inspector = createInspector();
+
+        Button button = new Button("Click me");
+        TextField field = new TextField();
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(button, field);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "Button"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+        assertEquals("Button", results.get(0).get("type"));
+    }
+
+    @Test
+    @DisplayName("Should find nodes by CSS id")
+    void shouldFindNodesById() {
+        SceneGraphInspector inspector = createInspector();
+
+        TextField field = new TextField();
+        field.setId("usernameField");
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(field);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("id", "usernameField"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+        assertEquals("usernameField", results.get(0).get("id"));
+    }
+
+    @Test
+    @DisplayName("Should find nodes by text content")
+    void shouldFindNodesByText() {
+        SceneGraphInspector inspector = createInspector();
+
+        Button button = new Button("Submit");
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(button);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("text", "Submit"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+        assertEquals("Submit", results.get(0).get("text"));
+    }
+
+    @Test
+    @DisplayName("Should find nodes by style class")
+    void shouldFindNodesByStyleClass() {
+        SceneGraphInspector inspector = createInspector();
+
+        Button button = new Button("Action");
+        button.getStyleClass().add("primary-action");
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(button);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("styleClass", "primary-action"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    @DisplayName("Should return empty list when no nodes match")
+    void shouldReturnEmptyListWhenNoMatch() {
+        SceneGraphInspector inspector = createInspector();
+
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(new Button("Hello"));
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "NonExistentType"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Should find nodes by text from TextField")
+    void shouldFindNodesByTextFromTextField() {
+        SceneGraphInspector inspector = createInspector();
+
+        TextField field = new TextField("Enter username");
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(field);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("text", "Enter"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+        assertEquals("Enter username", results.get(0).get("text"));
+    }
+
+    @Test
+    @DisplayName("Should find nodes by text from TextArea")
+    void shouldFindNodesByTextFromTextArea() {
+        SceneGraphInspector inspector = createInspector();
+
+        TextArea area = new TextArea("Multi-line\ntext content");
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(area);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("text", "text content"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+        assertEquals("Multi-line\ntext content", results.get(0).get("text"));
+    }
+
+    @Test
+    @DisplayName("Should find nodes by text from PasswordField")
+    void shouldFindNodesByTextFromPasswordField() {
+        SceneGraphInspector inspector = createInspector();
+
+        PasswordField field = new PasswordField();
+        field.setText("secret");
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(field);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("text", "secret"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+        assertEquals("secret", results.get(0).get("text"));
+    }
+
+    @Test
+    @DisplayName("Should find nodes by type from anonymous class")
+    void shouldFindByTypeWithAnonymousClass() {
+        SceneGraphInspector inspector = createInspector();
+
+        Button anonymousButton = new Button("Anonymous") {
+        };
+        runOnFxThread(() -> {
+            VBox newRoot = new VBox(anonymousButton);
+            stage.setScene(new Scene(newRoot, 300, 200));
+            stage.show();
+        });
+
+        AgentResponse response = inspector.findNodes(Map.of("type", "Button"));
+
+        assertTrue(response.isSuccess());
+        List<Map<String, Object>> results = castList(response.getData());
+        assertEquals(1, results.size());
+        assertEquals("Button", results.get(0).get("type"));
     }
 
     private SceneGraphInspector createInspector() {

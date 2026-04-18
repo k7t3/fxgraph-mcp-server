@@ -7,6 +7,7 @@ Java Attach API でターゲット JVM にインスペクタエージェント�
 ## 機能概要
 
 - **シーングラフ探索** — 実行中の JavaFX アプリのウィンドウ・ノードツリーを JSON で取得
+- **ノード検索** — タイプ・CSS ID・テキスト・スタイルクラスからノードを検索
 - **プロパティ読み取り・変更** — テキスト・スタイル・表示状態などのプロパティを動的に操作
 - **UI インタラクション** — クリック・フォーカス・キー入力を JavaFX イベントシステム経由で送信
 - **ノードハイライト** — 対象ノードを視覚的なオーバーレイでハイライト表示
@@ -17,7 +18,7 @@ Java Attach API でターゲット JVM にインスペクタエージェント�
 ```
 MCP Client (AI / OpenCode)
   └─[STDIO]─► McpServerApplication (Spring Boot)
-                └─► FxgraphService (@Tool × 12 メソッド)
+                └─► FxgraphService (@Tool × 13 メソッド)
                       └─► JavaFxAgent (Attach API + TCP socket)
                             └─[TCP NDJSON]─► FxGraphInspectorAgent (注入済みエージェント)
                                                └─► SceneGraphInspector
@@ -120,6 +121,7 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `getStages` | ウィンドウ（Stage）の一覧・サイズ・位置を取得 |
 | `getScenegraph` | シーングラフのツリー構造を取得（深さ・プロパティ・バウンズ指定可） |
 | `getNodeDetails` | 特定ノードの詳細プロパティを取得 |
+| `findNodes` | タイプ・CSS ID・テキスト・スタイルクラスからノードを検索 |
 | `setProperty` | ノードのプロパティ値を変更（text・style・visible 等） |
 | `selectNode` | ノードを視覚的にハイライト（赤枠オーバーレイ）。`nodeId=0` で解除 |
 | `clickNode` | ノードにクリックイベントを送信 |
@@ -169,6 +171,12 @@ $CLI <PID> stages
 
 # シーングラフを取得（深さ 3、テキストプロパティ付き）
 $CLI <PID> scenegraph --depth 3 --props --filter text
+
+# ノードを検索（タイプ・ID・テキスト・スタイルクラスから）
+$CLI <PID> find-nodes --type Button
+$CLI <PID> find-nodes --id submitBtn
+$CLI <PID> find-nodes --text "Submit"
+$CLI <PID> find-nodes --styleClass primary-action --stageId <STAGE_ID>
 
 # ノードの詳細プロパティを取得（--filter 必須）
 $CLI <PID> node-details <NODE_ID> --filter text,visible,disable

@@ -70,6 +70,127 @@ public class SceneGraphInspector {
         }
     }
 
+    // =============================================
+    // FIND_NODES
+    // =============================================
+
+    @SuppressWarnings("unchecked")
+    public AgentResponse findNodes(Map<String, Object> params) {
+        try {
+            String typeFilter = params != null ? (String) params.get("type") : null;
+            String idFilter = params != null ? (String) params.get("id") : null;
+            String textFilter = params != null ? (String) params.get("text") : null;
+            String styleClassFilter = params != null ? (String) params.get("styleClass") : null;
+            String stageIdFilter = params != null ? (String) params.get("stageId") : null;
+
+            List<Map<String, Object>> results = runOnFxThread(() ->
+                    searchNodes(typeFilter, idFilter, textFilter, styleClassFilter, stageIdFilter));
+            return AgentResponse.success(results);
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to find nodes: " + e.getMessage());
+        }
+    }
+
+    private List<Map<String, Object>> searchNodes(String typeFilter, String idFilter,
+                                                    String textFilter, String styleClassFilter,
+                                                    String stageIdFilter) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        ObservableList<Window> windows = Window.getWindows();
+
+        for (Window window : windows) {
+            if (!(window instanceof Stage stage)) continue;
+            Scene scene = stage.getScene();
+            if (scene == null || scene.getRoot() == null) continue;
+
+            String stageId = String.valueOf(System.identityHashCode(stage));
+            if (stageIdFilter != null && !stageIdFilter.equals(stageId)) continue;
+
+            searchNodeRecursive(scene.getRoot(), typeFilter, idFilter, textFilter,
+                    styleClassFilter, results);
+        }
+
+        return results;
+    }
+
+    private void searchNodeRecursive(Node node, String typeFilter, String idFilter,
+                                     String textFilter, String styleClassFilter,
+                                     List<Map<String, Object>> results) {
+        if (isInspectorNode(node)) return;
+
+        boolean matches = true;
+
+        if (typeFilter != null && !matchesType(node, typeFilter)) {
+            matches = false;
+        }
+
+        if (matches && idFilter != null && !Objects.equals(node.getId(), idFilter)) {
+            matches = false;
+        }
+
+        if (matches && textFilter != null) {
+            String text = getTextContent(node);
+            if (text == null || !text.contains(textFilter)) {
+                matches = false;
+            }
+        }
+
+        if (matches && styleClassFilter != null && !node.getStyleClass().contains(styleClassFilter)) {
+            matches = false;
+        }
+
+        if (matches) {
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("nodeId", System.identityHashCode(node));
+            info.put("type", nodeClassName(node));
+            String fxId = node.getId();
+            if (fxId != null) info.put("id", fxId);
+            String text = getTextContent(node);
+            if (text != null) info.put("text", text);
+            info.put("visible", node.isVisible());
+            results.add(info);
+        }
+
+        for (Node child : ChildrenGetter.getChildren(node)) {
+            searchNodeRecursive(child, typeFilter, idFilter, textFilter, styleClassFilter, results);
+        }
+    }
+
+    /**
+     * Extracts text content from a node, supporting {@link javafx.scene.control.Labeled}
+     * and {@link javafx.scene.control.TextInputControl} (TextField, TextArea, PasswordField).
+     */
+    private String getTextContent(Node node) {
+        if (node instanceof javafx.scene.control.TextInputControl textInput) {
+            return textInput.getText();
+        }
+        if (node instanceof javafx.scene.control.Labeled labeled) {
+            return labeled.getText();
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a node matches the given type filter, handling anonymous and inner classes.
+     * Uses {@code getSimpleName()} for direct matches, then walks up the superclass chain
+     * to find a matching simple name for anonymous/inner classes.
+     */
+    private boolean matchesType(Node node, String typeFilter) {
+        String simpleName = node.getClass().getSimpleName();
+        if (!simpleName.isEmpty() && simpleName.equals(typeFilter)) {
+            return true;
+        }
+        // Anonymous/inner class: walk up the superclass chain to find a matching simple name
+        Class<?> cls = node.getClass().getSuperclass();
+        while (cls != null && cls != Object.class) {
+            String parentSimple = cls.getSimpleName();
+            if (!parentSimple.isEmpty() && parentSimple.equals(typeFilter)) {
+                return true;
+            }
+            cls = cls.getSuperclass();
+        }
+        return false;
+    }
+
     private List<Map<String, Object>> collectStages() {
         List<Map<String, Object>> result = new ArrayList<>();
         ObservableList<Window> windows = Window.getWindows();

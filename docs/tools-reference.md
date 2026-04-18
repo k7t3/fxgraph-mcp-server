@@ -268,7 +268,70 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ---
 
-### 7. setProperty
+### 7. findNodes
+
+シーングラフから条件に一致するノードを検索します。タイプ・CSS ID・テキスト・スタイルクラスを組み合わせて指定できます。
+
+**説明**: Search for nodes in the JavaFX scene graph by type, CSS id, text content, or style class. Returns a list of matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| sessionId | string | はい | Session ID |
+| type | string | いいえ | JavaFX class name to filter (e.g., 'Button', 'TextField') |
+| id | string | いいえ | CSS id (fx:id) to match exactly |
+| text | string | いいえ | Text content to search for (case-sensitive contains match) |
+| styleClass | string | いいえ | Style class name to filter |
+| stageId | string | いいえ | Stage ID to limit search to a specific window |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "nodeId": 104383453,
+      "type": "Button",
+      "id": "submitBtn",
+      "text": "Submit",
+      "visible": true
+    },
+    {
+      "nodeId": 548650702,
+      "type": "Button",
+      "text": "Clear",
+      "visible": true
+    }
+  ]
+}
+```
+
+**検索例**:
+```json
+{
+  "sessionId": "...",
+  "type": "Button"
+}
+```
+
+```json
+{
+  "sessionId": "...",
+  "id": "usernameField"
+}
+```
+
+```json
+{
+  "sessionId": "...",
+  "text": "Submit",
+  "stageId": "123456789"
+}
+```
+
+---
+
+### 8. setProperty
 
 ノードのプロパティ値を設定します。
 
@@ -305,7 +368,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ---
 
-### 8. selectNode
+### 9. selectNode
 
 対象アプリケーションでノードを選択/ハイライト表示します。
 
@@ -330,7 +393,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ---
 
-### 9. clickNode
+### 10. clickNode
 
 指定したノードにクリックイベントを送信します。
 
@@ -352,7 +415,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ---
 
-### 10. requestFocus
+### 11. requestFocus
 
 指定したノードにフォーカスを要求します。
 
@@ -374,7 +437,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ---
 
-### 11. typeKey
+### 12. typeKey
 
 キー入力イベントを送信します。
 
@@ -397,7 +460,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ---
 
-### 12. takeScreenshot
+### 13. takeScreenshot
 
 指定したノード、またはシーングラフ全体のスクリーンショットを取得します。
 
