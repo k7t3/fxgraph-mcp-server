@@ -27,6 +27,7 @@ dependencies {
     compileOnly "org.openjfx:javafx-base:${libs.versions.javafx.get()}:${javafxPlatform}"
 
     // Test dependencies
+    testImplementation 'org.assertj:assertj-core:3.27.7'
     testImplementation 'org.testfx:testfx-junit5:4.0.18'
     testImplementation 'org.testfx:openjfx-monocle:21.0.2'
     testImplementation "org.openjfx:javafx-controls:${libs.versions.javafx.get()}:${javafxPlatform}"
@@ -38,6 +39,7 @@ shadowJar {
     archiveBaseName.set('fxgraph-agent')
     archiveClassifier.set('')
     archiveVersion.set('')
+    relocate 'com.fasterxml.jackson', 'io.github.k7t3.fxgraph.mcp.agent.internal.jackson'
     mergeServiceFiles()
     manifest {
         attributes(
@@ -64,6 +66,8 @@ jar {
 build.dependsOn shadowJar
 
 test {
+    dependsOn shadowJar
+
     // Always run TestFX in headless mode (Monocle) regardless of CI environment
     systemProperty "testfx.robot", "glass"
     systemProperty "testfx.headless", "true"
