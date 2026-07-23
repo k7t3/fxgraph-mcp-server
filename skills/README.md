@@ -22,7 +22,7 @@ Use the `installSkillJars` Gradle task to build and deploy both in one step.
 
 ```bash
 # Run from the project root — builds the JARs and copies them to skills/fxgraph/scripts/
-./gradlew :cli:installSkillJars
+./gradlew :fxgraph-cli:installSkillJars
 ```
 
 This task:
@@ -45,7 +45,7 @@ skills/fxgraph/scripts/
 
 ```bash
 # Build and install
-./gradlew :cli:installSkillJars
+./gradlew :fxgraph-cli:installSkillJars
 
 # Use the wrapper script directly (recommended)
 CLI="<path-to-skill>/scripts/fxgraph"
@@ -62,4 +62,4 @@ $CLI $PID scenegraph --depth 3
 
 - `fxgraph-agent.jar` is automatically injected into the target JVM on the first command for a given PID — no manual step required.
 - The agent uses the Java Attach API. Some JVM configurations may require `--add-opens` flags. See the project `README.md` if you encounter `AttachNotSupportedException`.
-- To rebuild after source changes, run the same `./gradlew :cli:installSkillJars` command.
+- To rebuild after source changes, run the same `./gradlew :fxgraph-cli:installSkillJars` command.

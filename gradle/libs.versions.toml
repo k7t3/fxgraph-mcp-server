@@ -1,7 +1,7 @@
 [versions]
 jackson                   = "2.18.3"
 junit                     = "5.10.0"
-mockito                   = "5.11.0"
+mockito                   = "5.23.0"
 javafx                    = "21"
 atlantafx                 = "2.0.1"
 spring-boot               = "4.0.2"

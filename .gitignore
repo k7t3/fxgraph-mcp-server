@@ -41,3 +41,6 @@ bin/
 
 ### Skills - built artifacts ###
 skills/fxgraph/scripts/*.jar
+
+## Agent
+.agents

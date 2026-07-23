@@ -36,12 +36,11 @@ AI → bash → scripts/fxgraph → fxgraph-cli.jar
 
 | モジュール | 役割 |
 |---|---|
-| `core` | 共有モデル・プロトコル・エージェント通信ロジック（Spring 非依存） |
-| `agent` | 対象 JVM に注入される Java Agent（Spring 非依存） |
-| `cli` | 軽量 CLI ツール（Agent Skills から直接利用） |
-| `mcp-server` | Spring Boot MCP サーバー（STDIO モード） |
+| `fxgraph-core` | 共有モデル・プロトコル・エージェント通信ロジック |
+| `fxgraph-agent` | 対象 JVM に注入される Java Agent |
+| `fxgraph-cli` | 軽量 CLI ツール（Agent Skills から直接利用） |
+| `fxgraph-mcp-server` | Spring Boot MCP サーバー（STDIO トランスポート） |
 | `javafx-test-app` | 動作確認用サンプル JavaFX アプリ |
-| `skills/fxgraph` | AI Agent Skill 定義・スクリプト |
 
 ## 必要要件
 
@@ -58,9 +57,9 @@ AI → bash → scripts/fxgraph → fxgraph-cli.jar
 ./gradlew build
 
 # 各モジュールの Shadow JAR を生成
-./gradlew :mcp-server:shadowJar   # → mcp-server/build/libs/fxgraph-mcp-server.jar
-./gradlew :cli:shadowJar          # → cli/build/libs/fxgraph-cli.jar
-./gradlew :agent:shadowJar        # → agent/build/libs/fxgraph-agent.jar
+./gradlew :fxgraph-mcp-server:shadowJar   # → fxgraph-mcp-server/build/libs/fxgraph-mcp-server.jar
+./gradlew :fxgraph-cli:shadowJar          # → fxgraph-cli/build/libs/fxgraph-cli.jar
+./gradlew :fxgraph-agent:shadowJar        # → fxgraph-agent/build/libs/fxgraph-agent.jar
 ```
 
 ### MCP サーバーとして使用する（OpenCodeの場合）
@@ -68,7 +67,7 @@ AI → bash → scripts/fxgraph → fxgraph-cli.jar
 `fxgraph-mcp-server.jar` を生成し、OpenCode の設定ファイルに追記します。
 
 ```bash
-./gradlew :mcp-server:shadowJar
+./gradlew :fxgraph-mcp-server:shadowJar
 ```
 
 **`~/.config/opencode/config.json` の設定例:**
@@ -95,7 +94,7 @@ AI → bash → scripts/fxgraph → fxgraph-cli.jar
 CLI と Agent JAR を `skills/fxgraph/scripts/` へデプロイします。
 
 ```bash
-./gradlew :cli:installSkillJars
+./gradlew :fxgraph-cli:installSkillJars
 ```
 
 デプロイ後の構成:
@@ -210,16 +209,16 @@ CLI の完全なオプション仕様は `skills/fxgraph/references/` を参照�
 ./gradlew test
 
 # モジュール別テスト
-./gradlew :core:test
-./gradlew :agent:test        # Monocle (headless) で JavaFX テストを実行
-./gradlew :cli:test
-./gradlew :mcp-server:test   # 統合テスト（事前に shadowJar が必要）
+./gradlew :fxgraph-core:test
+./gradlew :fxgraph-agent:test        # Monocle (headless) で JavaFX テストを実行
+./gradlew :fxgraph-cli:test
+./gradlew :fxgraph-mcp-server:test   # 統合テスト（事前に shadowJar が必要）
 
 # 統合テストの事前準備
-./gradlew :mcp-server:shadowJar && ./gradlew :mcp-server:test
+./gradlew :fxgraph-mcp-server:shadowJar && ./gradlew :fxgraph-mcp-server:test
 ```
 
-`agent` モジュールのテストは Monocle ヘッドレスモードで実行されるため、CI 環境でも追加設定不要です。
+`fxgraph-agent` モジュールのテストは Monocle ヘッドレスモードで実行されるため、CI 環境でも追加設定不要です。
 
 ## 動作確認用サンプルアプリ
 

@@ -516,7 +516,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 }
 ```
 
-### SVNode（Scenegraph Node）
+### SceneGraphNode
 
 **デフォルト（コンパクトモード）:**
 ```json
