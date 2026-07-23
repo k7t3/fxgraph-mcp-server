@@ -1,7 +1,6 @@
 package io.github.k7t3.fxgraph.mcp.tools;
 
 import io.github.k7t3.fxgraph.mcp.agent.JavaFxAgent;
-import io.github.k7t3.fxgraph.mcp.agent.SessionManager;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentCommand;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import io.github.k7t3.fxgraph.mcp.model.*;
@@ -10,6 +9,7 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.function.IntFunction;
 
 /**
  * MCP tool definitions for inspecting JavaFX application scene graphs.
@@ -18,10 +18,17 @@ import java.util.*;
 @Service
 public class FxgraphService {
 
-    private final SessionManager sessionManager;
+    private final IntFunction<JavaFxAgent> agentFactory;
 
-    public FxgraphService(SessionManager sessionManager) {
-        this.sessionManager = sessionManager;
+    /**
+     * Creates a service that opens a fresh connection for each tool invocation.
+     */
+    public FxgraphService() {
+        this(pid -> new JavaFxAgent(Integer.toString(pid)));
+    }
+
+    FxgraphService(IntFunction<JavaFxAgent> agentFactory) {
+        this.agentFactory = Objects.requireNonNull(agentFactory);
     }
 
     // ===================================================
@@ -42,52 +49,55 @@ public class FxgraphService {
         return result;
     }
 
-    @Tool(description = "Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. If the application is already connected, the existing session is returned. Returns a sessionId to use with other tools.")
+    @Tool(description = "Prepare a JavaFX application for inspection by PID. This injects the inspection agent when necessary, verifies communication, and then closes the transient connection. Other tools connect independently using the same PID.")
     public Map<String, Object> connectApplication(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        try {
-            // Return existing session if the PID is already connected
-            String existingSessionId = sessionManager.findSessionIdByPid(String.valueOf(pid));
-            if (existingSessionId != null) {
-                JavaFxAgent existingAgent = sessionManager.get(existingSessionId);
-                result.put("success", true);
-                result.put("sessionId", existingSessionId);
-                result.put("agentPort", existingAgent.getAgentPort());
-                return result;
-            }
+        var result = new LinkedHashMap<String, Object>();
+        if (pid <= 0) {
+            result.put("success", false);
+            result.put("error", "PID must be a positive integer: " + pid);
+            return result;
+        }
 
-            JavaFxAgent agent = new JavaFxAgent(String.valueOf(pid));
+        var agent = agentFactory.apply(pid);
+        try {
             agent.connect();
 
-            String sessionId = UUID.randomUUID().toString();
-            sessionManager.register(sessionId, agent);
-
             result.put("success", true);
-            result.put("sessionId", sessionId);
             result.put("agentPort", agent.getAgentPort());
         } catch (Exception e) {
             result.put("success", false);
             result.put("error", e.getMessage());
+        } finally {
+            agent.disconnectWithoutShutdown();
         }
         return result;
     }
 
-    @Tool(description = "Disconnect from a connected JavaFX application and clean up resources.")
+    @Tool(description = "Stop the injected inspection agent in a JavaFX application by PID. Normal tool calls close their transient connections automatically and do not require this operation.")
     public Map<String, Object> disconnectApplication(
-            @ToolParam(description = "Session ID obtained from connectApplication") String sessionId) {
-        Map<String, Object> result = new LinkedHashMap<>();
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid) {
+        var result = new LinkedHashMap<String, Object>();
+        if (pid <= 0) {
+            result.put("success", false);
+            result.put("error", "PID must be a positive integer: " + pid);
+            return result;
+        }
+
+        var agent = agentFactory.apply(pid);
+        var stopped = false;
         try {
-            if (!sessionManager.isActive(sessionId)) {
-                result.put("success", false);
-                result.put("error", "Session not found or already disconnected: " + sessionId);
-                return result;
-            }
-            sessionManager.remove(sessionId);
+            agent.connect();
+            agent.disconnect();
+            stopped = true;
             result.put("success", true);
         } catch (Exception e) {
             result.put("success", false);
             result.put("error", e.getMessage());
+        } finally {
+            if (!stopped) {
+                agent.disconnectWithoutShutdown();
+            }
         }
         return result;
     }
@@ -98,13 +108,13 @@ public class FxgraphService {
 
     @Tool(description = "Get the list of JavaFX Stages (windows) in the connected application. Each stage has a stageId, title, dimensions, and a rootNodeId pointing to the root of its scene graph.")
     public Map<String, Object> getStages(
-            @ToolParam(description = "Session ID") String sessionId) {
-        return sendAgentCommand(sessionId, new AgentCommand(AgentCommand.CommandType.GET_STAGES));
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid) {
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.GET_STAGES));
     }
 
     @Tool(description = "Get the scene graph tree structure from a connected JavaFX application. Returns a compact hierarchical tree by default. Use depth to limit tree depth, includeBounds to include node bounding boxes, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.")
     public Map<String, Object> getScenegraph(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Stage ID to inspect (omit to get all stages)", required = false) String stageId,
             @ToolParam(description = "Maximum depth to traverse (default: unlimited)", required = false) Integer depth,
             @ToolParam(description = "Include bounding box (x,y,w,h) for each node (default: false)", required = false) Boolean includeBounds,
@@ -120,13 +130,13 @@ public class FxgraphService {
         if (propertyFilter != null) params.put("propertyFilter", propertyFilter);
         if (includeTransforms != null) params.put("includeTransforms", includeTransforms);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.GET_SCENEGRAPH, params));
     }
 
     @Tool(description = "Get detailed information about a specific node including all its properties, children summary, bounds, style classes, and more. Use the nodeId obtained from getScenegraph. Optionally filter properties with propertyFilter.")
     public Map<String, Object> getNodeDetails(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID (identityHashCode of the JavaFX Node)") int nodeId,
             @ToolParam(description = "List of property names to include (e.g., ['text', 'value']). Omit to get all properties.", required = false) List<String> propertyFilter) {
 
@@ -134,13 +144,13 @@ public class FxgraphService {
         params.put("nodeId", nodeId);
         if (propertyFilter != null) params.put("propertyFilter", propertyFilter);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.GET_NODE_DETAILS, params));
     }
 
     @Tool(description = "Search for nodes in the JavaFX scene graph by type, CSS id, text content, or style class. Returns a list of matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.")
     public Map<String, Object> findNodes(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "JavaFX class name to filter (e.g., 'Button', 'TextField'). Omit to match all types.", required = false) String type,
             @ToolParam(description = "CSS id (fx:id) to match exactly. Omit to match all ids.", required = false) String id,
             @ToolParam(description = "Text content to search for (case-sensitive contains match). Omit to match all text.", required = false) String text,
@@ -154,7 +164,7 @@ public class FxgraphService {
         if (styleClass != null) params.put("styleClass", styleClass);
         if (stageId != null) params.put("stageId", stageId);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.FIND_NODES, params));
     }
 
@@ -164,7 +174,7 @@ public class FxgraphService {
 
     @Tool(description = "Set a property value on a JavaFX node. Supports setting text, numbers, booleans, colors, and style strings. Returns the old and new values.")
     public Map<String, Object> setProperty(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID") int nodeId,
             @ToolParam(description = "Property name (e.g. 'text', 'style', 'visible', 'opacity')") String propertyName,
             @ToolParam(description = "New value as string") String value,
@@ -176,13 +186,13 @@ public class FxgraphService {
         params.put("value", value);
         if (valueType != null) params.put("valueType", valueType);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.SET_PROPERTY, params));
     }
 
     @Tool(description = "Highlight/select a node in the target JavaFX application by drawing a visual overlay (red border). Pass nodeId=0 to clear the highlight.")
     public Map<String, Object> selectNode(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID (use 0 to clear selection)") int nodeId,
             @ToolParam(description = "Show bounds rectangle overlay (default: true)", required = false) Boolean showBounds) {
 
@@ -190,37 +200,37 @@ public class FxgraphService {
         params.put("nodeId", nodeId);
         params.put("showBounds", showBounds != null ? showBounds : true);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
 
     @Tool(description = "Click a JavaFX node by nodeId using JavaFX Event System for simulated input.")
     public Map<String, Object> clickNode(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID") int nodeId) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("nodeId", nodeId);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.CLICK_NODE, params));
     }
 
     @Tool(description = "Request keyboard focus for a JavaFX node by nodeId.")
     public Map<String, Object> requestFocus(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID") int nodeId) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("nodeId", nodeId);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.REQUEST_FOCUS, params));
     }
 
     @Tool(description = "Type a key into a JavaFX node using JavaFX Event System. If nodeId is omitted, the currently focused node is used.")
     public Map<String, Object> typeKey(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Key text or key code name (e.g. 'a', 'ENTER')") String key,
             @ToolParam(description = "Target node ID (optional, defaults to focused node)", required = false) Integer nodeId) {
 
@@ -228,13 +238,13 @@ public class FxgraphService {
         params.put("key", key);
         if (nodeId != null) params.put("nodeId", nodeId);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.TYPE_KEY, params));
     }
 
     @Tool(description = "Take a screenshot of a specific node or the whole scene graph. Saves PNG to the specified path.")
     public Map<String, Object> takeScreenshot(
-            @ToolParam(description = "Session ID") String sessionId,
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Target node ID (optional; if omitted, captures full scene graph)", required = false) Integer nodeId,
             @ToolParam(description = "Stage ID for full scene graph capture (optional)", required = false) String stageId,
             @ToolParam(description = "Path to save the PNG screenshot") String savePath,
@@ -248,7 +258,7 @@ public class FxgraphService {
         if (maxWidth != null) params.put("maxWidth", maxWidth);
         if (maxHeight != null) params.put("maxHeight", maxHeight);
 
-        return sendAgentCommand(sessionId,
+        return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.TAKE_SCREENSHOT, params));
     }
 
@@ -257,20 +267,21 @@ public class FxgraphService {
     // ===================================================
 
     /**
-     * Send a command to the agent via the session and return the response as a Map.
+     * Open a transient connection, send one command, and return the response as a Map.
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> sendAgentCommand(String sessionId, AgentCommand command) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        try {
-            JavaFxAgent agent = sessionManager.get(sessionId);
-            if (agent == null || !agent.isConnected()) {
-                result.put("success", false);
-                result.put("error", "Session not found or disconnected: " + sessionId);
-                return result;
-            }
+    private Map<String, Object> sendAgentCommand(int pid, AgentCommand command) {
+        var result = new LinkedHashMap<String, Object>();
+        if (pid <= 0) {
+            result.put("success", false);
+            result.put("error", "PID must be a positive integer: " + pid);
+            return result;
+        }
 
-            AgentResponse response = agent.sendCommand(command);
+        var agent = agentFactory.apply(pid);
+        try {
+            agent.connect();
+            var response = agent.sendCommand(command);
 
             result.put("success", response.isSuccess());
             if (response.isSuccess()) {
@@ -284,7 +295,9 @@ public class FxgraphService {
             }
         } catch (Exception e) {
             result.put("success", false);
-            result.put("error", "Communication error: " + e.getMessage());
+            result.put("error", "Communication error with PID " + pid + ": " + e.getMessage());
+        } finally {
+            agent.disconnectWithoutShutdown();
         }
         return result;
     }

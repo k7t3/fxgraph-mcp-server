@@ -1,44 +1,47 @@
 package io.github.k7t3.fxgraph.mcp.tools;
 
 import io.github.k7t3.fxgraph.mcp.agent.JavaFxAgent;
-import io.github.k7t3.fxgraph.mcp.agent.SessionManager;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentCommand;
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import io.github.k7t3.fxgraph.mcp.model.JavaFxApplication;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 /**
- * Tests for FxgraphService.
- * Uses mocked JavaFxAgent to test the service layer independently of actual JVM attachment.
+ * Tests the stateless MCP service independently of the Attach API.
  */
-@SuppressWarnings("unchecked")
 class FxgraphServiceTest {
 
-    private SessionManager sessionManager;
+    private static final int PID = 12345;
+
+    private JavaFxAgent agent;
     private FxgraphService service;
 
     @BeforeEach
     void setUp() {
-        sessionManager = new SessionManager();
-        service = new FxgraphService(sessionManager);
+        agent = mock(JavaFxAgent.class);
+        service = new FxgraphService(pid -> agent);
     }
-
-    // ===== discoverApplications =====
 
     @Test
     void discoverApplicationsReturnsResult() {
-        // discoverApplications() is a static call to JavaFxAgent, hard to mock fully.
-        // We just verify it doesn't throw and returns a valid structure.
-        Map<String, Object> result = service.discoverApplications();
+        var result = service.discoverApplications();
+
         assertNotNull(result);
         assertTrue(result.containsKey("success"));
     }
@@ -46,481 +49,315 @@ class FxgraphServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void discoverApplicationsReturnsOnlyJavaFxApplications() {
-        // discoverApplications() should only return JavaFX apps.
-        // All returned entries must have isJavaFX=true.
-        Map<String, Object> result = service.discoverApplications();
-        assertTrue((boolean) result.get("success"));
-
-        List<JavaFxApplication> apps = (List<JavaFxApplication>) result.get("applications");
-        assertNotNull(apps);
-        for (JavaFxApplication app : apps) {
-            assertTrue(app.isJavaFX(),
-                    "All discovered applications must be JavaFX applications, but found: " + app.getMainClass());
-        }
-    }
-
-    // ===== connectApplication =====
-
-    @Test
-    void connectApplicationFailsForInvalidPid() {
-        // Using PID 0 which is invalid
-        Map<String, Object> result = service.connectApplication(0);
-        assertNotNull(result);
-        assertFalse((boolean) result.get("success"));
-        assertNotNull(result.get("error"));
-    }
-
-    @Test
-    void connectApplicationReturnsExistingSessionWhenAlreadyConnected() throws Exception {
-        // Register a mock agent for PID 12345
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.getPid()).thenReturn("12345");
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.getAgentPort()).thenReturn(54321);
-        sessionManager.register("existing-session", agent);
-
-        // Calling connectApplication with the same PID should return the existing session
-        Map<String, Object> result = service.connectApplication(12345);
+        var result = service.discoverApplications();
 
         assertTrue((boolean) result.get("success"));
-        assertEquals("existing-session", result.get("sessionId"));
-        assertEquals(54321, result.get("agentPort"));
-        // No new connection attempt should be made
-        verify(agent, never()).connect();
+        var applications = (List<JavaFxApplication>) result.get("applications");
+        assertNotNull(applications);
+        assertTrue(applications.stream().allMatch(JavaFxApplication::isJavaFX));
     }
 
-    // ===== disconnectApplication =====
-
     @Test
-    void disconnectApplicationWithInvalidSession() {
-        Map<String, Object> result = service.disconnectApplication("nonexistent-session");
+    void connectApplicationRejectsInvalidPid() {
+        var result = service.connectApplication(0);
+
         assertFalse((boolean) result.get("success"));
-        assertEquals("Session not found or already disconnected: nonexistent-session", result.get("error"));
+        assertEquals("PID must be a positive integer: 0", result.get("error"));
+        verifyNoInteractions(agent);
     }
 
     @Test
-    void disconnectApplicationSuccess() throws Exception {
-        // Register a mock agent
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        sessionManager.register("session-1", agent);
+    void connectApplicationReportsConnectionFailureAndCleansUp() throws Exception {
+        when(agent.connect()).thenThrow(new Exception("attach failed"));
 
-        Map<String, Object> result = service.disconnectApplication("session-1");
-        assertTrue((boolean) result.get("success"));
-        // Session should be removed
-        assertNull(sessionManager.get("session-1"));
-    }
+        var result = service.connectApplication(PID);
 
-    // ===== getStages =====
-
-    @Test
-    void getStagesWithInvalidSession() {
-        Map<String, Object> result = service.getStages("invalid");
         assertFalse((boolean) result.get("success"));
-        assertTrue(result.get("error").toString().contains("Session not found"));
+        assertEquals("attach failed", result.get("error"));
+        verify(agent).disconnectWithoutShutdown();
     }
 
     @Test
-    void getStagesSuccess() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        List<Map<String, Object>> stages = List.of(
+    void disconnectApplicationRejectsInvalidPid() {
+        var result = service.disconnectApplication(-1);
+
+        assertFalse((boolean) result.get("success"));
+        assertEquals("PID must be a positive integer: -1", result.get("error"));
+        verifyNoInteractions(agent);
+    }
+
+    @Test
+    void getStagesReturnsAgentData() throws Exception {
+        var stages = List.of(
                 Map.of("stageId", "123", "title", "Main", "width", 800.0, "height", 600.0)
         );
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.success(stages));
-        sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.getStages("session-1");
+        var result = service.getStages(PID);
+
         assertTrue((boolean) result.get("success"));
-        assertNotNull(result.get("data"));
-    }
-
-    // ===== getScenegraph =====
-
-    @Test
-    void getScenegraphWithInvalidSession() {
-        Map<String, Object> result = service.getScenegraph("invalid", null, null, null, null, null, null);
-        assertFalse((boolean) result.get("success"));
+        assertEquals(stages, result.get("data"));
+        assertCommandType(AgentCommand.CommandType.GET_STAGES);
     }
 
     @Test
-    void getScenegraphSuccess() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        Map<String, Object> scenegraphData = Map.of(
-                "stages", List.of(),
-                "rootNodes", List.of()
-        );
+    void getScenegraphReturnsMapDataAtTopLevel() throws Exception {
+        var scenegraph = Map.of("stages", List.of(), "rootNodes", List.of());
         when(agent.sendCommand(any(AgentCommand.class)))
-                .thenReturn(AgentResponse.success(scenegraphData));
-        sessionManager.register("session-1", agent);
+                .thenReturn(AgentResponse.success(scenegraph));
 
-        Map<String, Object> result = service.getScenegraph("session-1", null, 3, null, false, null, false);
+        var result = service.getScenegraph(PID, null, 3, null, false, null, false);
+
         assertTrue((boolean) result.get("success"));
-        // totalNodeCount は廃止済み
+        assertEquals(List.of(), result.get("rootNodes"));
         assertFalse(result.containsKey("totalNodeCount"));
     }
 
     @Test
-    void getScenegraphWithStageIdFilter() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class)))
-                .thenReturn(AgentResponse.success(Map.of("stages", List.of(), "rootNodes", List.of())));
-        sessionManager.register("session-1", agent);
+    void getScenegraphSendsFilters() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.getScenegraph("session-1", "stage-123", 5, true, true, List.of("text", "value"), false);
+        service.getScenegraph(PID, "stage-123", 5, true, true, List.of("text", "value"), false);
 
-        // Verify the command was sent with correct params
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        AgentCommand cmd = captor.getValue();
-        assertEquals(AgentCommand.CommandType.GET_SCENEGRAPH, cmd.getCommand());
-        assertEquals("stage-123", cmd.getParams().get("stageId"));
-        assertEquals(5, cmd.getParams().get("depth"));
-        assertEquals(true, cmd.getParams().get("includeBounds"));
-        assertEquals(true, cmd.getParams().get("includeProperties"));
-        assertEquals(List.of("text", "value"), cmd.getParams().get("propertyFilter"));
-    }
-
-    // ===== getNodeDetails =====
-
-    @Test
-    void getNodeDetailsWithInvalidSession() {
-        Map<String, Object> result = service.getNodeDetails("invalid", 42, null);
-        assertFalse((boolean) result.get("success"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.GET_SCENEGRAPH, command.getCommand());
+        assertEquals("stage-123", command.getParams().get("stageId"));
+        assertEquals(5, command.getParams().get("depth"));
+        assertEquals(true, command.getParams().get("includeBounds"));
+        assertEquals(true, command.getParams().get("includeProperties"));
+        assertEquals(List.of("text", "value"), command.getParams().get("propertyFilter"));
+        assertEquals(false, command.getParams().get("includeTransforms"));
     }
 
     @Test
-    void getNodeDetailsSuccess() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        Map<String, Object> nodeData = Map.of(
+    void getNodeDetailsReturnsNodeData() throws Exception {
+        var nodeData = Map.of(
                 "node", Map.of("nodeId", 42, "type", "Button"),
                 "properties", List.of(),
                 "children", List.of()
         );
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.success(nodeData));
-        sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.getNodeDetails("session-1", 42, null);
+        var result = service.getNodeDetails(PID, 42, null);
+
         assertTrue((boolean) result.get("success"));
         assertTrue(result.containsKey("node"));
     }
 
     @Test
-    void getNodeDetailsSendsCorrectNodeId() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class)))
-                .thenReturn(AgentResponse.success(Map.of()));
-        sessionManager.register("session-1", agent);
+    void getNodeDetailsSendsNodeIdAndPropertyFilter() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.getNodeDetails("session-1", 99999, List.of("text"));
+        service.getNodeDetails(PID, 99999, List.of("text"));
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(AgentCommand.CommandType.GET_NODE_DETAILS, captor.getValue().getCommand());
-        assertEquals(99999, captor.getValue().getParams().get("nodeId"));
-        assertEquals(List.of("text"), captor.getValue().getParams().get("propertyFilter"));
-    }
-
-    // ===== findNodes =====
-
-    @Test
-    @DisplayName("Should return error when session is invalid")
-    void findNodesWithInvalidSession() {
-        Map<String, Object> result = service.findNodes("invalid", "Button", null, null, null, null);
-        assertFalse((boolean) result.get("success"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.GET_NODE_DETAILS, command.getCommand());
+        assertEquals(99999, command.getParams().get("nodeId"));
+        assertEquals(List.of("text"), command.getParams().get("propertyFilter"));
     }
 
     @Test
-    @DisplayName("Should return found nodes when session is valid")
-    void findNodesSuccess() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        List<Map<String, Object>> nodes = List.of(
-                Map.of("nodeId", 12345, "type", "Button", "id", "submitBtn", "text", "Submit", "visible", true)
+    void findNodesReturnsMatches() throws Exception {
+        var nodes = List.of(
+                Map.of("nodeId", 12345, "type", "Button", "id", "submitBtn", "text", "Submit")
         );
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.success(nodes));
-        sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.findNodes("session-1", "Button", null, null, null, null);
+        var result = service.findNodes(PID, "Button", null, null, null, null);
+
         assertTrue((boolean) result.get("success"));
-        assertNotNull(result.get("data"));
+        assertEquals(nodes, result.get("data"));
     }
 
     @Test
-    @DisplayName("Should send correct params to agent")
-    void findNodesSendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
+    void findNodesSendsSearchCriteria() throws Exception {
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.success(List.of()));
-        sessionManager.register("session-1", agent);
 
-        service.findNodes("session-1", "TextField", "usernameField", "Enter", null, "stage-123");
+        service.findNodes(PID, "TextField", "usernameField", "Enter", null, "stage-123");
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        AgentCommand cmd = captor.getValue();
-        assertEquals(AgentCommand.CommandType.FIND_NODES, cmd.getCommand());
-        assertEquals("TextField", cmd.getParams().get("type"));
-        assertEquals("usernameField", cmd.getParams().get("id"));
-        assertEquals("Enter", cmd.getParams().get("text"));
-        assertEquals("stage-123", cmd.getParams().get("stageId"));
-        assertFalse(cmd.getParams().containsKey("styleClass"));
-    }
-
-    // ===== setProperty =====
-
-    @Test
-    void setPropertyWithInvalidSession() {
-        Map<String, Object> result = service.setProperty("invalid", 42, "text", "hello", null);
-        assertFalse((boolean) result.get("success"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.FIND_NODES, command.getCommand());
+        assertEquals("TextField", command.getParams().get("type"));
+        assertEquals("usernameField", command.getParams().get("id"));
+        assertEquals("Enter", command.getParams().get("text"));
+        assertEquals("stage-123", command.getParams().get("stageId"));
+        assertFalse(command.getParams().containsKey("styleClass"));
     }
 
     @Test
-    void setPropertySuccess() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
+    void setPropertyReturnsOldAndNewValues() throws Exception {
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.success(Map.of("oldValue", "old", "newValue", "new")));
-        sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.setProperty("session-1", 42, "text", "hello", "string");
+        var result = service.setProperty(PID, 42, "text", "hello", "string");
+
         assertTrue((boolean) result.get("success"));
         assertEquals("old", result.get("oldValue"));
         assertEquals("new", result.get("newValue"));
     }
 
     @Test
-    void setPropertySendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class)))
-                .thenReturn(AgentResponse.success(Map.of()));
-        sessionManager.register("session-1", agent);
+    void setPropertySendsValueTypeWhenProvided() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.setProperty("session-1", 42, "opacity", "0.5", "number");
+        service.setProperty(PID, 42, "opacity", "0.5", "number");
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        AgentCommand cmd = captor.getValue();
-        assertEquals(AgentCommand.CommandType.SET_PROPERTY, cmd.getCommand());
-        assertEquals(42, cmd.getParams().get("nodeId"));
-        assertEquals("opacity", cmd.getParams().get("propertyName"));
-        assertEquals("0.5", cmd.getParams().get("value"));
-        assertEquals("number", cmd.getParams().get("valueType"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.SET_PROPERTY, command.getCommand());
+        assertEquals(42, command.getParams().get("nodeId"));
+        assertEquals("opacity", command.getParams().get("propertyName"));
+        assertEquals("0.5", command.getParams().get("value"));
+        assertEquals("number", command.getParams().get("valueType"));
     }
 
     @Test
-    void setPropertyWithoutValueType() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class)))
-                .thenReturn(AgentResponse.success(Map.of()));
-        sessionManager.register("session-1", agent);
+    void setPropertyOmitsValueTypeWhenAbsent() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.setProperty("session-1", 42, "text", "hello", null);
+        service.setProperty(PID, 42, "text", "hello", null);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        // valueType should not be in params when null
-        assertFalse(captor.getValue().getParams().containsKey("valueType"));
-    }
-
-    // ===== selectNode =====
-
-    @Test
-    void selectNodeWithInvalidSession() {
-        Map<String, Object> result = service.selectNode("invalid", 42, null);
-        assertFalse((boolean) result.get("success"));
+        assertFalse(capturedCommand().getParams().containsKey("valueType"));
     }
 
     @Test
-    void selectNodeSuccess() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
+    void selectNodeReturnsHighlightState() throws Exception {
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.success(Map.of("highlighted", true)));
-        sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.selectNode("session-1", 42, true);
+        var result = service.selectNode(PID, 42, true);
+
         assertTrue((boolean) result.get("success"));
         assertEquals(true, result.get("highlighted"));
     }
 
     @Test
-    void selectNodeClearHighlight() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class)))
-                .thenReturn(AgentResponse.success(Map.of("highlighted", true)));
-        sessionManager.register("session-1", agent);
+    void selectNodeDefaultsToShowingBounds() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.selectNode("session-1", 0, null);
+        service.selectNode(PID, 0, null);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(0, captor.getValue().getParams().get("nodeId"));
-        // showBounds defaults to true when null
-        assertEquals(true, captor.getValue().getParams().get("showBounds"));
-    }
-
-    // ===== clickNode / requestFocus / typeKey =====
-
-    @Test
-    void clickNodeWithInvalidSession() {
-        Map<String, Object> result = service.clickNode("invalid", 42);
-        assertFalse((boolean) result.get("success"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.SELECT_NODE, command.getCommand());
+        assertEquals(0, command.getParams().get("nodeId"));
+        assertEquals(true, command.getParams().get("showBounds"));
     }
 
     @Test
-    void clickNodeSendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("clicked", true)));
-        sessionManager.register("session-1", agent);
+    void clickNodeSendsNodeId() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.clickNode("session-1", 42);
+        service.clickNode(PID, 42);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(AgentCommand.CommandType.CLICK_NODE, captor.getValue().getCommand());
-        assertEquals(42, captor.getValue().getParams().get("nodeId"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.CLICK_NODE, command.getCommand());
+        assertEquals(42, command.getParams().get("nodeId"));
     }
 
     @Test
-    void requestFocusSendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("focused", true)));
-        sessionManager.register("session-1", agent);
+    void requestFocusSendsNodeId() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.requestFocus("session-1", 77);
+        service.requestFocus(PID, 77);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(AgentCommand.CommandType.REQUEST_FOCUS, captor.getValue().getCommand());
-        assertEquals(77, captor.getValue().getParams().get("nodeId"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.REQUEST_FOCUS, command.getCommand());
+        assertEquals(77, command.getParams().get("nodeId"));
     }
 
     @Test
-    void typeKeyWithNodeIdSendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("typed", true)));
-        sessionManager.register("session-1", agent);
+    void typeKeySendsOptionalNodeId() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.typeKey("session-1", "ENTER", 88);
+        service.typeKey(PID, "ENTER", 88);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(AgentCommand.CommandType.TYPE_KEY, captor.getValue().getCommand());
-        assertEquals("ENTER", captor.getValue().getParams().get("key"));
-        assertEquals(88, captor.getValue().getParams().get("nodeId"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.TYPE_KEY, command.getCommand());
+        assertEquals("ENTER", command.getParams().get("key"));
+        assertEquals(88, command.getParams().get("nodeId"));
     }
 
     @Test
-    void typeKeyWithoutNodeIdOmitsNodeParam() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("typed", true)));
-        sessionManager.register("session-1", agent);
+    void typeKeyOmitsNodeIdWhenAbsent() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.typeKey("session-1", "a", null);
+        service.typeKey(PID, "a", null);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals("a", captor.getValue().getParams().get("key"));
-        assertFalse(captor.getValue().getParams().containsKey("nodeId"));
+        var command = capturedCommand();
+        assertEquals("a", command.getParams().get("key"));
+        assertFalse(command.getParams().containsKey("nodeId"));
     }
 
     @Test
-    void takeScreenshotWithNodeIdSendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/a.png")));
-        sessionManager.register("session-1", agent);
+    void takeScreenshotSendsNodeTargetAndDimensions() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.takeScreenshot("session-1", 88, null, "/tmp/a.png", null, null);
+        service.takeScreenshot(PID, 88, "stage-1", "/tmp/result.png", 640, 480);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
-        assertEquals(88, captor.getValue().getParams().get("nodeId"));
-        assertFalse(captor.getValue().getParams().containsKey("stageId"));
-        assertEquals("/tmp/a.png", captor.getValue().getParams().get("savePath"));
-        assertFalse(captor.getValue().getParams().containsKey("maxWidth"));
-        assertFalse(captor.getValue().getParams().containsKey("maxHeight"));
+        var command = capturedCommand();
+        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, command.getCommand());
+        assertEquals(88, command.getParams().get("nodeId"));
+        assertEquals("stage-1", command.getParams().get("stageId"));
+        assertEquals("/tmp/result.png", command.getParams().get("savePath"));
+        assertEquals(640, command.getParams().get("maxWidth"));
+        assertEquals(480, command.getParams().get("maxHeight"));
     }
 
     @Test
-    void takeScreenshotScenegraphWithStageIdSendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/b.png")));
-        sessionManager.register("session-1", agent);
+    void takeScreenshotOmitsAbsentOptionalParameters() throws Exception {
+        stubSuccessfulMapResponse();
 
-        service.takeScreenshot("session-1", null, "stage-1", "/tmp/b.png", null, null);
+        service.takeScreenshot(PID, null, null, "/tmp/result.png", null, null);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
-        assertEquals("stage-1", captor.getValue().getParams().get("stageId"));
-        assertFalse(captor.getValue().getParams().containsKey("nodeId"));
-        assertEquals("/tmp/b.png", captor.getValue().getParams().get("savePath"));
-        assertFalse(captor.getValue().getParams().containsKey("maxWidth"));
-        assertFalse(captor.getValue().getParams().containsKey("maxHeight"));
+        var params = capturedCommand().getParams();
+        assertFalse(params.containsKey("nodeId"));
+        assertFalse(params.containsKey("stageId"));
+        assertFalse(params.containsKey("maxWidth"));
+        assertFalse(params.containsKey("maxHeight"));
     }
 
     @Test
-    void takeScreenshotWithMaxDimensionsSendsCorrectParams() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
-        when(agent.sendCommand(any(AgentCommand.class))).thenReturn(AgentResponse.success(Map.of("savedPath", "/tmp/c.png")));
-        sessionManager.register("session-1", agent);
-
-        service.takeScreenshot("session-1", 88, "stage-1", "/tmp/c.png", 640, 480);
-
-        var captor = org.mockito.ArgumentCaptor.forClass(AgentCommand.class);
-        verify(agent).sendCommand(captor.capture());
-        assertEquals(AgentCommand.CommandType.TAKE_SCREENSHOT, captor.getValue().getCommand());
-        assertEquals(88, captor.getValue().getParams().get("nodeId"));
-        assertEquals("stage-1", captor.getValue().getParams().get("stageId"));
-        assertEquals(640, captor.getValue().getParams().get("maxWidth"));
-        assertEquals(480, captor.getValue().getParams().get("maxHeight"));
-    }
-
-    // ===== Agent communication error handling =====
-
-    @Test
-    void agentCommunicationError() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
+    void communicationFailureReturnsPidAndClosesConnection() throws Exception {
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenThrow(new Exception("Connection closed by agent"));
-        sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.getStages("session-1");
+        var result = service.getStages(PID);
+
         assertFalse((boolean) result.get("success"));
-        assertTrue(result.get("error").toString().contains("Communication error"));
+        assertTrue(result.get("error").toString().contains("PID " + PID));
+        assertTrue(result.get("error").toString().contains("Connection closed by agent"));
+        verify(agent).disconnectWithoutShutdown();
     }
 
     @Test
-    void agentReturnsError() throws Exception {
-        JavaFxAgent agent = mock(JavaFxAgent.class);
-        when(agent.isConnected()).thenReturn(true);
+    void agentErrorIsReturnedWithoutRewritingIt() throws Exception {
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenReturn(AgentResponse.error("Node not found: 42"));
-        sessionManager.register("session-1", agent);
 
-        Map<String, Object> result = service.getNodeDetails("session-1", 42, null);
+        var result = service.getNodeDetails(PID, 42, null);
+
         assertFalse((boolean) result.get("success"));
         assertEquals("Node not found: 42", result.get("error"));
+    }
+
+    private void stubSuccessfulMapResponse() throws Exception {
+        when(agent.sendCommand(any(AgentCommand.class)))
+                .thenReturn(AgentResponse.success(Map.of()));
+    }
+
+    private AgentCommand capturedCommand() throws Exception {
+        var captor = ArgumentCaptor.forClass(AgentCommand.class);
+        verify(agent).sendCommand(captor.capture());
+        return captor.getValue();
+    }
+
+    private void assertCommandType(AgentCommand.CommandType commandType) throws Exception {
+        assertEquals(commandType, capturedCommand().getCommand());
+        verify(agent).connect();
+        verify(agent).disconnectWithoutShutdown();
+        verify(agent, never()).disconnect();
     }
 }

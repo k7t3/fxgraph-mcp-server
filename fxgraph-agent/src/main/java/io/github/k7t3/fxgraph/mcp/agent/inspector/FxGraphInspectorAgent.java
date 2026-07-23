@@ -51,7 +51,8 @@ public class FxGraphInspectorAgent {
             System.setProperty("fxgraph.agent.port", String.valueOf(assignedPort));
 
             running = true;
-            serverThread = new Thread(FxGraphInspectorAgent::runServer, "fxgraph-inspector-agent");
+            var listeningSocket = serverSocket;
+            serverThread = new Thread(() -> runServer(listeningSocket), "fxgraph-inspector-agent");
             serverThread.setDaemon(true);
             serverThread.start();
 
@@ -60,15 +61,15 @@ public class FxGraphInspectorAgent {
         }
     }
 
-    private static void runServer() {
-        ObjectMapper mapper = new ObjectMapper();
-        SceneGraphInspector inspector = new SceneGraphInspector();
+    private static void runServer(ServerSocket listeningSocket) {
+        var mapper = new ObjectMapper();
+        var inspector = new SceneGraphInspector();
 
-        while (running) {
-            try (Socket client = serverSocket.accept()) {
+        while (running && serverSocket == listeningSocket) {
+            try (var client = listeningSocket.accept()) {
                 handleClient(client, mapper, inspector);
             } catch (IOException e) {
-                if (running) {
+                if (running && serverSocket == listeningSocket) {
                     System.err.println("[FxGraphInspectorAgent] Connection error: " + e.getMessage());
                 }
             }
@@ -134,9 +135,13 @@ public class FxGraphInspectorAgent {
 
     public static void shutdown() {
         running = false;
+        System.clearProperty("fxgraph.agent.port");
+        assignedPort = -1;
+        var listeningSocket = serverSocket;
+        serverSocket = null;
         try {
-            if (serverSocket != null) {
-                serverSocket.close();
+            if (listeningSocket != null) {
+                listeningSocket.close();
             }
         } catch (IOException e) {
             // Ignore

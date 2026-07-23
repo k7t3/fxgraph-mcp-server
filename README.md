@@ -115,8 +115,8 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | ツール | 説明 |
 |---|---|
 | `discoverApplications` | 実行中の JavaFX アプリケーションを一覧取得 |
-| `connectApplication` | PID 指定でアプリケーションに接続し `sessionId` を取得 |
-| `disconnectApplication` | 接続を切断してリソースを解放 |
+| `connectApplication` | PID 指定でインスペクタエージェントを準備 |
+| `disconnectApplication` | PID 指定でインスペクタエージェントを停止 |
 | `getStages` | ウィンドウ（Stage）の一覧・サイズ・位置を取得 |
 | `getScenegraph` | シーングラフのツリー構造を取得（深さ・プロパティ・バウンズ指定可） |
 | `getNodeDetails` | 特定ノードの詳細プロパティを取得 |
@@ -137,21 +137,21 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
    → [{ "pid": 12345, "mainClass": "com.example.MyApp", "javaFX": true }]
 
 2. connectApplication(pid: 12345)
-   → { "sessionId": "550e8400-...", "agentPort": 54321 }
+   → { "success": true, "agentPort": 54321 }
 
-3. getStages(sessionId: "550e8400-...")
+3. getStages(pid: 12345)
    → [{ "stageId": "...", "title": "Main Window", "rootNodeId": 987654321 }]
 
-4. getScenegraph(sessionId: "...", depth: 3, includeProperties: true, propertyFilter: ["text"])
+4. getScenegraph(pid: 12345, depth: 3, includeProperties: true, propertyFilter: ["text"])
    → { "rootNodes": [{ "nodeId": 987654321, "type": "VBox", "children": [...] }] }
 
-5. setProperty(sessionId: "...", nodeId: 123456, propertyName: "text", value: "Hello")
+5. setProperty(pid: 12345, nodeId: 123456, propertyName: "text", value: "Hello")
    → { "oldValue": "Click Me", "newValue": "Hello" }
 
-6. takeScreenshot(sessionId: "...", savePath: "/tmp/result.png")
+6. takeScreenshot(pid: 12345, savePath: "/tmp/result.png")
    → { "savedPath": "/tmp/result.png", "width": 800, "height": 600 }
 
-7. disconnectApplication(sessionId: "...")
+7. disconnectApplication(pid: 12345)
    → { "success": true }
 ```
 

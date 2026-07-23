@@ -54,9 +54,9 @@ MCP Client  <-->  MCP Server (STDIO)  <-->  Agent (TCP Socket)  <-->  JavaFX Sce
 
 ### 2. connectApplication
 
-PIDを指定してJavaFXアプリケーションに接続します。対象JVMにインスペクタエージェントを注入し、通信チャネルを確立します。すでに接続済みのPIDを指定した場合は既存のセッションを返します。
+PIDを指定してJavaFXアプリケーションを検査できる状態にします。必要に応じて対象JVMへインスペクタエージェントを注入し、通信確認後に一時接続を閉じます。
 
-**説明**: Connect to a JavaFX application by PID. This injects an inspection agent into the target JVM and establishes a communication channel. If the application is already connected, the existing session is returned. Returns a sessionId to use with other tools.
+**説明**: Prepare a JavaFX application for inspection by PID. This injects the inspection agent when necessary, verifies communication, and then closes the transient connection. Other tools connect independently using the same PID.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -67,7 +67,6 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 ```json
 {
   "success": true,
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
   "agentPort": 54321
 }
 ```
@@ -76,14 +75,14 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ### 3. disconnectApplication
 
-接続済みのJavaFXアプリケーションから切断します。
+対象JavaFXアプリケーションに注入されたインスペクタエージェントを停止します。通常のツール呼び出しは一時接続を自動的に閉じるため、この操作は必須ではありません。
 
-**説明**: Disconnect from a connected JavaFX application and clean up resources.
+**説明**: Stop the injected inspection agent in a JavaFX application by PID. Normal tool calls close their transient connections automatically and do not require this operation.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID obtained from connectApplication |
+| pid | integer | はい | Process ID of the target JavaFX application |
 
 **出力例**:
 ```json
@@ -103,7 +102,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 
 **出力例**:
 ```json
@@ -135,7 +134,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | stageId | string | いいえ | Stage ID to inspect (omit to get all stages) |
 | depth | integer | いいえ | Maximum depth to traverse (default: unlimited) |
 | includeBounds | boolean | いいえ | Include bounding box (x,y,w,h) for each node (default: false) |
@@ -219,7 +218,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID (identityHashCode of the JavaFX Node) |
 | propertyFilter | array<string> | いいえ | List of property names to include (e.g., ["text", "value"]). Omit to get all properties. |
 
@@ -277,7 +276,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | type | string | いいえ | JavaFX class name to filter (e.g., 'Button', 'TextField') |
 | id | string | いいえ | CSS id (fx:id) to match exactly |
 | text | string | いいえ | Text content to search for (case-sensitive contains match) |
@@ -309,21 +308,21 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **検索例**:
 ```json
 {
-  "sessionId": "...",
+  "pid": 12345,
   "type": "Button"
 }
 ```
 
 ```json
 {
-  "sessionId": "...",
+  "pid": 12345,
   "id": "usernameField"
 }
 ```
 
 ```json
 {
-  "sessionId": "...",
+  "pid": 12345,
   "text": "Submit",
   "stageId": "123456789"
 }
@@ -340,7 +339,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID |
 | propertyName | string | はい | Property name (e.g. 'text', 'style', 'visible', 'opacity') |
 | value | string | はい | New value as string |
@@ -358,7 +357,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **スタイルを設定する例**:
 ```json
 {
-  "sessionId": "...",
+  "pid": 12345,
   "nodeId": 123,
   "propertyName": "style",
   "value": "-fx-background-color: #FF0000;",
@@ -377,7 +376,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID (use 0 to clear selection) |
 | showBounds | boolean | いいえ | Show bounds rectangle overlay (default: true) |
 
@@ -402,7 +401,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID |
 
 **出力例**:
@@ -424,7 +423,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID |
 
 **出力例**:
@@ -446,7 +445,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | key | string | はい | Key text or key code name (e.g. 'a', 'ENTER') |
 | nodeId | integer | いいえ | Target node ID (optional, defaults to focused node) |
 
@@ -469,7 +468,7 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| sessionId | string | はい | Session ID |
+| pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | いいえ | Target node ID (optional; if omitted, captures full scene graph) |
 | stageId | string | いいえ | Stage ID for full scene graph capture (optional) |
 | savePath | string | はい | Path to save the PNG screenshot |
@@ -616,48 +615,48 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 2. **アプリケーションに接続**:
    ```
    connectApplication(pid: 12345)
-   → { "sessionId": "xxx", "agentPort": 54321, "success": true }
+   → { "agentPort": 54321, "success": true }
    ```
 
 3. **ステージ一覧を取得**:
    ```
-   getStages(sessionId: "xxx")
+   getStages(pid: 12345)
    → { "data": [{ "stageId": "123", "title": "Main Window", ... }] }
    ```
 
 4. **シーングラフを取得**:
    ```
-   getScenegraph(sessionId: "xxx", depth: 3)
+   getScenegraph(pid: 12345, depth: 3)
    → { "stages": [{"stageId":"123","title":"Main Window","rootNodeId":987654321}], "rootNodes": [...] }
    ```
 
 5. **特定ノードの詳細を取得**:
    ```
-   getNodeDetails(sessionId: "xxx", nodeId: 123456)
+   getNodeDetails(pid: 12345, nodeId: 123456)
    → { "node": {...}, "properties": [...], "children": [...] }
    ```
 
 6. **ノードをハイライト**:
    ```
-   selectNode(sessionId: "xxx", nodeId: 123456)
+   selectNode(pid: 12345, nodeId: 123456)
    ```
 
 7. **切断**:
    ```
-   disconnectApplication(sessionId: "xxx")
+   disconnectApplication(pid: 12345)
    ```
 
 ### プロパティ変更フロー
 
 1. **ノードの現在のプロパティを確認**:
    ```
-   getNodeDetails(sessionId: "xxx", nodeId: 123456)
+   getNodeDetails(pid: 12345, nodeId: 123456)
    ```
 
 2. **プロパティを変更**:
    ```
    setProperty(
-     sessionId: "xxx",
+     pid: 12345,
      nodeId: 123456,
      propertyName: "text",
      value: "New Text"
@@ -667,12 +666,12 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 3. **ノードをハイライトして視覚的に確認**:
    ```
-   selectNode(sessionId: "xxx", nodeId: 123456, showBounds: true)
+   selectNode(pid: 12345, nodeId: 123456, showBounds: true)
    ```
 
 4. **ハイライトを解除**:
    ```
-   selectNode(sessionId: "xxx", nodeId: 0)
+   selectNode(pid: 12345, nodeId: 0)
    ```
 
 ---
@@ -690,7 +689,8 @@ PIDを指定してJavaFXアプリケーションに接続します。対象JVM�
 
 ### 一般的なエラー
 
-- `Session not found or disconnected` - 無効なセッションIDが指定されたか、接続が切れた
+- `PID must be a positive integer` - PIDに0以下の値が指定された
+- `Communication error with PID ...` - 対象JVMへの接続または通信に失敗
 - `Node not found` - 指定されたノードIDが存在しない
 - `Failed to connect to JavaFX application` - JavaFXアプリケーションへの接続に失敗
 - `Property not found or not writable` - 指定されたプロパティが存在しないか読み取り専用

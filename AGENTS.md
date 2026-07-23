@@ -63,7 +63,7 @@ MCP Client (AI)
 ./gradlew :fxgraph-mcp-server:test --tests "io.github.k7t3.fxgraph.mcp.tools.FxgraphServiceTest"
 
 # 単一テストメソッドの実行
-./gradlew :fxgraph-mcp-server:test --tests "io.github.k7t3.fxgraph.mcp.tools.FxgraphServiceTest.connectApplicationReturnsExistingSessionWhenAlreadyConnected"
+./gradlew :fxgraph-mcp-server:test --tests "io.github.k7t3.fxgraph.mcp.tools.StatelessFxgraphServiceTest.connectApplicationDoesNotCreateServerSideSession"
 
 # テスト結果の継続表示（--info でログ出力）
 ./gradlew :fxgraph-mcp-server:test --info

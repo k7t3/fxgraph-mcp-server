@@ -42,8 +42,8 @@ AI から JavaFX アプリケーションを Scenic View のように検査・�
 | ツール | 説明 |
 |-------|------|
 | `discoverApplications` | 実行中の JavaFX アプリを検出する |
-| `connectApplication` | 指定 PID のアプリに接続し sessionId を返す |
-| `disconnectApplication` | セッションを切断する |
+| `connectApplication` | 指定 PID のアプリにインスペクタエージェントを準備する |
+| `disconnectApplication` | 指定 PID のインスペクタエージェントを停止する |
 | `getStages` | Stage（ウィンドウ）一覧を取得する |
 | `getScenegraph` | シーングラフツリーを取得する |
 | `getNodeDetails` | 指定ノードのプロパティ詳細を取得する |
@@ -59,7 +59,6 @@ AI から JavaFX アプリケーションを Scenic View のように検査・�
 | パッケージ | クラス | 説明 |
 |-----------|-------|------|
 | `mcp.server` | `McpServerApplication` | Spring Boot エントリポイント |
-| `mcp.agent` | `SessionManager` | 接続セッションの管理 (@Component) |
 | `mcp.tools` | `FxgraphService` | MCP ツール定義 (@Component) |
 
 ## 技術スタック

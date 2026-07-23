@@ -32,8 +32,6 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class McpServerStdioIntegrationTest {
 
-    private static final String SERVER_JAR_PATH = "build/libs/mcp-server.jar";
-
     private static Path logbackConfigPath;
 
     private McpSyncClient client;
@@ -63,7 +61,7 @@ class McpServerStdioIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        Path jarPath = Path.of(SERVER_JAR_PATH);
+        var jarPath = findServerJar();
         Assumptions.assumeTrue(Files.exists(jarPath),
                 "Shadow JAR not found at " + jarPath.toAbsolutePath()
                         + ". Run './gradlew :fxgraph-mcp-server:shadowJar' first.");
@@ -81,6 +79,14 @@ class McpServerStdioIntegrationTest {
                 .initializationTimeout(Duration.ofSeconds(30))
                 .clientInfo(new McpSchema.Implementation("test-client", "1.0.0"))
                 .build();
+    }
+
+    private static Path findServerJar() {
+        var moduleLocalPath = Path.of("build/libs/fxgraph-mcp-server.jar");
+        if (Files.exists(moduleLocalPath)) {
+            return moduleLocalPath;
+        }
+        return Path.of("fxgraph-mcp-server/build/libs/fxgraph-mcp-server.jar");
     }
 
     @AfterEach
@@ -188,6 +194,25 @@ class McpServerStdioIntegrationTest {
         }
     }
 
+    @Test
+    void targetedToolsRequirePidAndDoNotExposeSessionId() {
+        client.initialize();
+
+        var targetedTools = client.listTools().tools().stream()
+                .filter(tool -> !"discoverApplications".equals(tool.name()))
+                .toList();
+
+        for (var tool : targetedTools) {
+            var schema = tool.inputSchema();
+            assertTrue(schema.properties().containsKey("pid"),
+                    () -> tool.name() + " should expose pid: " + schema);
+            assertTrue(schema.required().contains("pid"),
+                    () -> tool.name() + " should require pid: " + schema);
+            assertFalse(schema.properties().containsKey("sessionId"),
+                    () -> tool.name() + " must not expose sessionId: " + schema);
+        }
+    }
+
     // ===== Tool Invocation =====
 
     @Test
@@ -211,20 +236,20 @@ class McpServerStdioIntegrationTest {
     }
 
     @Test
-    void callDisconnectApplicationWithInvalidSessionReturnsError() {
+    void callDisconnectApplicationWithInvalidPidReturnsError() {
         client.initialize();
 
         McpSchema.CallToolResult result = client.callTool(
                 new McpSchema.CallToolRequest("disconnectApplication",
-                        Map.of("sessionId", "nonexistent-session-id")));
+                        Map.of("pid", 0)));
 
         assertNotNull(result);
         assertNotNull(result.content());
         assertFalse(result.content().isEmpty());
 
         String text = ((McpSchema.TextContent) result.content().getFirst()).text();
-        assertTrue(text.contains("Session not found") || text.contains("error"),
-                "Response should indicate session not found: " + text);
+        assertTrue(text.contains("PID must be a positive integer") || text.contains("error"),
+                "Response should indicate invalid PID: " + text);
     }
 
     @Test
@@ -245,54 +270,54 @@ class McpServerStdioIntegrationTest {
     }
 
     @Test
-    void callGetStagesWithInvalidSessionReturnsError() {
+    void callGetStagesWithInvalidPidReturnsError() {
         client.initialize();
 
         McpSchema.CallToolResult result = client.callTool(
                 new McpSchema.CallToolRequest("getStages",
-                        Map.of("sessionId", "invalid-session")));
+                        Map.of("pid", 0)));
 
         assertNotNull(result);
         assertNotNull(result.content());
         assertFalse(result.content().isEmpty());
 
         String text = ((McpSchema.TextContent) result.content().getFirst()).text();
-        assertTrue(text.contains("Session not found") || text.contains("error"),
-                "Response should indicate session not found: " + text);
+        assertTrue(text.contains("PID must be a positive integer") || text.contains("error"),
+                "Response should indicate invalid PID: " + text);
     }
 
     @Test
-    void callGetScenegraphWithInvalidSessionReturnsError() {
+    void callGetScenegraphWithInvalidPidReturnsError() {
         client.initialize();
 
         McpSchema.CallToolResult result = client.callTool(
                 new McpSchema.CallToolRequest("getScenegraph",
-                        Map.of("sessionId", "invalid-session")));
+                        Map.of("pid", 0)));
 
         assertNotNull(result);
         assertNotNull(result.content());
         assertFalse(result.content().isEmpty());
 
         String text = ((McpSchema.TextContent) result.content().getFirst()).text();
-        assertTrue(text.contains("Session not found") || text.contains("error"),
-                "Response should indicate session not found: " + text);
+        assertTrue(text.contains("PID must be a positive integer") || text.contains("error"),
+                "Response should indicate invalid PID: " + text);
     }
 
     @Test
-    void callGetNodeDetailsWithInvalidSessionReturnsError() {
+    void callGetNodeDetailsWithInvalidPidReturnsError() {
         client.initialize();
 
         McpSchema.CallToolResult result = client.callTool(
                 new McpSchema.CallToolRequest("getNodeDetails",
-                        Map.of("sessionId", "invalid-session", "nodeId", 42)));
+                        Map.of("pid", 0, "nodeId", 42)));
 
         assertNotNull(result);
         assertNotNull(result.content());
         assertFalse(result.content().isEmpty());
 
         String text = ((McpSchema.TextContent) result.content().getFirst()).text();
-        assertTrue(text.contains("Session not found") || text.contains("error"),
-                "Response should indicate session not found: " + text);
+        assertTrue(text.contains("PID must be a positive integer") || text.contains("error"),
+                "Response should indicate invalid PID: " + text);
     }
 
     // ===== Multiple Operations =====
@@ -311,10 +336,10 @@ class McpServerStdioIntegrationTest {
                 new McpSchema.CallToolRequest("discoverApplications", Map.of()));
         assertNotNull(discoverResult);
 
-        // Third call: disconnect with invalid session
+        // Third call: disconnect with invalid PID
         McpSchema.CallToolResult disconnectResult = client.callTool(
                 new McpSchema.CallToolRequest("disconnectApplication",
-                        Map.of("sessionId", "does-not-exist")));
+                        Map.of("pid", 0)));
         assertNotNull(disconnectResult);
     }
 }
