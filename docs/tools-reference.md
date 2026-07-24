@@ -394,9 +394,9 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ### 10. clickNode
 
-指定したノードにクリックイベントを送信します。
+指定したノードをクリック相当の操作で起動します。
 
-**説明**: Click a JavaFX node by nodeId using JavaFX Event System for simulated input. The click event is fired directly on the target node.
+**説明**: `ButtonBase` にはコントロール固有の `fire()` を呼び出し、それ以外のノードには中央座標でプライマリボタンの合成 `MOUSE_CLICKED` イベントを送信します。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。ネイティブ OS クリックではありません。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |

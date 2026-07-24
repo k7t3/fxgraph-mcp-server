@@ -123,7 +123,7 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `findNodes` | タイプ・CSS ID・テキスト・スタイルクラスからノードを検索 |
 | `setProperty` | ノードのプロパティ値を変更（text・style・visible 等） |
 | `selectNode` | ノードを視覚的にハイライト（赤枠オーバーレイ）。`nodeId=0` で解除 |
-| `clickNode` | ノードにクリックイベントを送信 |
+| `clickNode` | ButtonBase を起動、またはノードに合成クリックイベントを送信 |
 | `requestFocus` | ノードにキーボードフォーカスを要求 |
 | `typeKey` | キー入力イベントを送信（`ENTER`・`TAB` 等のキーコード対応） |
 | `takeScreenshot` | ノードまたはシーン全体のスクリーンショットを PNG 保存 |

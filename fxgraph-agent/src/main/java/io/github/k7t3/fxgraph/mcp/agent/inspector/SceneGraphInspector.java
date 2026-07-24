@@ -17,9 +17,10 @@ import javafx.scene.image.WritablePixelFormat;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.PickResult;
 import javafx.scene.control.ButtonBase;
-import javafx.event.ActionEvent;
 import javafx.scene.paint.Color;
+import javafx.scene.layout.Region;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import javafx.stage.Stage;
@@ -540,49 +541,62 @@ public class SceneGraphInspector {
     }
 
     private String doClickNode(int nodeId) {
-        Node node = findNodeById(nodeId);
+        var node = findNodeById(nodeId);
         if (node == null) return "Node not found: " + nodeId;
+        if (!isEffectivelyVisible(node)) return "Node is not visible: " + nodeId;
+        if (node.isDisabled()) return "Node is disabled: " + nodeId;
 
-        Window window = node.getScene() != null ? node.getScene().getWindow() : null;
+        var bounds = node.getBoundsInLocal();
+        if (hasZeroSize(node, bounds)) {
+            return "Node is not visible or has zero size: " + nodeId;
+        }
+
+        var window = node.getScene() != null ? node.getScene().getWindow() : null;
         if (window != null) {
             window.requestFocus();
         }
 
         if (node instanceof ButtonBase buttonBase) {
-            ActionEvent actionEvent = new ActionEvent(ActionEvent.ACTION, buttonBase);
-            buttonBase.fireEvent(actionEvent);
+            buttonBase.fire();
             return null;
-        }
-
-        Bounds bounds = node.getBoundsInLocal();
-        if (bounds == null || bounds.getWidth() == 0 || bounds.getHeight() == 0) {
-            return "Node is not visible or has zero size: " + nodeId;
         }
 
         double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
         double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
 
-        javafx.geometry.Point2D screenCoords = node.localToScreen(localX, localY);
-        double screenX = screenCoords.getX();
-        double screenY = screenCoords.getY();
+        var sceneCoordinates = node.localToScene(localX, localY);
+        var screenCoordinates = node.localToScreen(localX, localY);
 
-        MouseEvent clickEvent = new MouseEvent(
+        var clickEvent = new MouseEvent(
             MouseEvent.MOUSE_CLICKED,
-            localX, localY,
-            screenX, screenY,
+            sceneCoordinates.getX(), sceneCoordinates.getY(),
+            screenCoordinates.getX(), screenCoordinates.getY(),
             MouseButton.PRIMARY,
             1,
-            false, false, false, false,
-            true,
-            true,
-            true,
-            true,
-            true,
-            true,
-            null
+            false, false, false, false, // modifier keys
+            false, false, false,        // buttons down after a completed click
+            true, false, true,          // synthesized, popup trigger, still since press
+            new PickResult(node, sceneCoordinates.getX(), sceneCoordinates.getY())
         );
         node.fireEvent(clickEvent);
         return null;
+    }
+
+    private boolean hasZeroSize(Node node, Bounds bounds) {
+        if (bounds == null || bounds.getWidth() == 0 || bounds.getHeight() == 0) {
+            return true;
+        }
+        return node instanceof Region region
+                && (region.getWidth() == 0 || region.getHeight() == 0);
+    }
+
+    private boolean isEffectivelyVisible(Node node) {
+        for (var current = node; current != null; current = current.getParent()) {
+            if (!current.isVisible()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Boolean doRequestFocus(int nodeId) {

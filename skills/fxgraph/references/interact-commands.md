@@ -61,7 +61,8 @@ Use this to visually confirm you have the right node before modifying it.
 
 ## click-node
 
-Fire a `MouseEvent.MOUSE_CLICKED` on the center of a node.
+Activate a `ButtonBase` through its `fire()` method, or fire a synthetic primary
+`MouseEvent.MOUSE_CLICKED` on the center of another node.
 
 ```bash
 $CLI $PID click-node $NODE_ID
@@ -72,7 +73,8 @@ $CLI $PID click-node $NODE_ID
 { "success": true, "clicked": true }
 ```
 
-- The application must be running and the node must be visible and responsive.
+- The application must be running and the node and its ancestors must be visible.
+- Disabled and zero-size nodes are rejected.
 - Fires a simulated JavaFX event, not a native OS click.
 
 ---

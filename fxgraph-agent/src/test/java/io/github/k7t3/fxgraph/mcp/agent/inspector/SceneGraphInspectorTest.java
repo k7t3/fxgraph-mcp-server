@@ -2,6 +2,7 @@ package io.github.k7t3.fxgraph.mcp.agent.inspector;
 
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import javafx.application.Platform;
+import javafx.geometry.Point2D;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -12,7 +13,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
@@ -41,6 +44,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 @ExtendWith(ApplicationExtension.class)
 class SceneGraphInspectorTest {
@@ -364,6 +369,55 @@ class SceneGraphInspectorTest {
     }
 
     @Test
+    void clickNode_updatesButtonBaseState() {
+        var inspector = createInspector();
+        var toggleButton = new ToggleButton("Toggle");
+        runOnFxThread(() -> root.getChildren().setAll(toggleButton));
+
+        var response = inspector.clickNode(Map.of(
+                "nodeId", System.identityHashCode(toggleButton)
+        ));
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(toggleButton.isSelected()).isTrue();
+    }
+
+    @Test
+    void clickNode_returnsErrorForDisabledNode() {
+        var inspector = createInspector();
+        var button = new Button("Disabled");
+        button.setDisable(true);
+        var actions = new AtomicInteger();
+        button.setOnAction(event -> actions.incrementAndGet());
+        runOnFxThread(() -> root.getChildren().setAll(button));
+        var nodeId = System.identityHashCode(button);
+
+        var response = inspector.clickNode(Map.of("nodeId", nodeId));
+
+        assertThat(response.isSuccess()).isFalse();
+        assertThat(response.getError()).isEqualTo("Node is disabled: " + nodeId);
+        assertThat(actions).hasValue(0);
+    }
+
+    @Test
+    void clickNode_returnsErrorWhenAncestorIsInvisible() {
+        var inspector = createInspector();
+        var button = new Button("Hidden");
+        var hiddenContainer = new VBox(button);
+        hiddenContainer.setVisible(false);
+        var actions = new AtomicInteger();
+        button.setOnAction(event -> actions.incrementAndGet());
+        runOnFxThread(() -> root.getChildren().setAll(hiddenContainer));
+        var nodeId = System.identityHashCode(button);
+
+        var response = inspector.clickNode(Map.of("nodeId", nodeId));
+
+        assertThat(response.isSuccess()).isFalse();
+        assertThat(response.getError()).isEqualTo("Node is not visible: " + nodeId);
+        assertThat(actions).hasValue(0);
+    }
+
+    @Test
     void clickNode_firesMouseEventForNode() {
         SceneGraphInspector inspector = createInspector();
         Rectangle rect = new Rectangle(20, 20);
@@ -376,6 +430,46 @@ class SceneGraphInspectorTest {
 
         assertTrue(response.isSuccess());
         assertEquals(1, clicks.get());
+    }
+
+    @Test
+    void clickNode_createsConsistentMouseEvent() {
+        var inspector = createInspector();
+        var rectangle = new Rectangle(20, 20);
+        rectangle.setTranslateX(80);
+        rectangle.setTranslateY(40);
+        var clickedEvent = new AtomicReference<MouseEvent>();
+        var expectedScenePoint = new AtomicReference<Point2D>();
+        var expectedScreenPoint = new AtomicReference<Point2D>();
+        rectangle.addEventHandler(MouseEvent.MOUSE_CLICKED, clickedEvent::set);
+        runOnFxThread(() -> root.getChildren().setAll(rectangle));
+        runOnFxThread(() -> {
+            expectedScenePoint.set(rectangle.localToScene(10, 10));
+            expectedScreenPoint.set(rectangle.localToScreen(10, 10));
+        });
+
+        var response = inspector.clickNode(Map.of(
+                "nodeId", System.identityHashCode(rectangle)
+        ));
+
+        var event = clickedEvent.get();
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(event).isNotNull();
+        assertThat(event.getSource()).isSameAs(rectangle);
+        assertThat(event.getTarget()).isSameAs(rectangle);
+        assertThat(event.getX()).isCloseTo(10, within(0.0001));
+        assertThat(event.getY()).isCloseTo(10, within(0.0001));
+        assertThat(event.getSceneX()).isCloseTo(expectedScenePoint.get().getX(), within(0.0001));
+        assertThat(event.getSceneY()).isCloseTo(expectedScenePoint.get().getY(), within(0.0001));
+        assertThat(event.getScreenX()).isCloseTo(expectedScreenPoint.get().getX(), within(0.0001));
+        assertThat(event.getScreenY()).isCloseTo(expectedScreenPoint.get().getY(), within(0.0001));
+        assertThat(event.getButton()).isEqualTo(MouseButton.PRIMARY);
+        assertThat(event.isPrimaryButtonDown()).isFalse();
+        assertThat(event.isMiddleButtonDown()).isFalse();
+        assertThat(event.isSecondaryButtonDown()).isFalse();
+        assertThat(event.isSynthesized()).isTrue();
+        assertThat(event.isPopupTrigger()).isFalse();
+        assertThat(event.isStillSincePress()).isTrue();
     }
 
     @Test
@@ -398,6 +492,28 @@ class SceneGraphInspectorTest {
 
         assertFalse(response.isSuccess());
         assertEquals("Node is not visible or has zero size: " + nodeId, response.getError());
+    }
+
+    @Test
+    void clickNode_returnsErrorForZeroSizeButton() {
+        var inspector = createInspector();
+        var button = new Button("Zero");
+        button.setManaged(false);
+        button.resize(0, 0);
+        var actions = new AtomicInteger();
+        button.setOnAction(event -> actions.incrementAndGet());
+        runOnFxThread(() -> root.getChildren().setAll(button));
+        var nodeId = System.identityHashCode(button);
+        assertThat(button.getWidth()).isZero();
+        assertThat(button.getHeight()).isZero();
+
+        var response = inspector.clickNode(Map.of("nodeId", nodeId));
+
+        assertThat(response.isSuccess()).isFalse();
+        assertThat(response.getError()).isEqualTo(
+                "Node is not visible or has zero size: " + nodeId
+        );
+        assertThat(actions).hasValue(0);
     }
 
     @Test
