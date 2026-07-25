@@ -18,6 +18,13 @@ import java.util.function.IntFunction;
 @Service
 public class FxgraphService {
 
+    private static final String MISSING_JAVA_INSTRUMENT_MESSAGE =
+            "Module java.instrument not found";
+    private static final String MISSING_JAVA_INSTRUMENT_ERROR_CODE =
+            "TARGET_RUNTIME_MISSING_JAVA_INSTRUMENT";
+    private static final String MISSING_JAVA_INSTRUMENT_ACTION =
+            "Rebuild the target jlink/jpackage runtime with java.instrument included.";
+
     private final IntFunction<JavaFxAgent> agentFactory;
 
     /**
@@ -66,8 +73,7 @@ public class FxgraphService {
             result.put("success", true);
             result.put("agentPort", agent.getAgentPort());
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
+            putConnectionFailure(result, pid, e, e.getMessage());
         } finally {
             agent.disconnectWithoutShutdown();
         }
@@ -92,8 +98,7 @@ public class FxgraphService {
             stopped = true;
             result.put("success", true);
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
+            putConnectionFailure(result, pid, e, e.getMessage());
         } finally {
             if (!stopped) {
                 agent.disconnectWithoutShutdown();
@@ -294,11 +299,46 @@ public class FxgraphService {
                 result.put("error", response.getError());
             }
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", "Communication error with PID " + pid + ": " + e.getMessage());
+            putConnectionFailure(
+                    result,
+                    pid,
+                    e,
+                    "Communication error with PID " + pid + ": " + e.getMessage());
         } finally {
             agent.disconnectWithoutShutdown();
         }
         return result;
+    }
+
+    private static void putConnectionFailure(
+            Map<String, Object> result,
+            int pid,
+            Exception failure,
+            String fallbackMessage) {
+        result.put("success", false);
+
+        var details = findCauseMessage(failure, MISSING_JAVA_INSTRUMENT_MESSAGE);
+        if (details == null) {
+            result.put("error", fallbackMessage);
+            return;
+        }
+
+        result.put("errorCode", MISSING_JAVA_INSTRUMENT_ERROR_CODE);
+        result.put(
+                "error",
+                "Cannot connect to PID " + pid + " because the target Java runtime "
+                        + "does not include the java.instrument module.");
+        result.put("action", MISSING_JAVA_INSTRUMENT_ACTION);
+        result.put("details", details);
+    }
+
+    private static String findCauseMessage(Throwable failure, String expectedText) {
+        for (var current = failure; current != null; current = current.getCause()) {
+            var message = current.getMessage();
+            if (message != null && message.contains(expectedText)) {
+                return message;
+            }
+        }
+        return null;
     }
 }

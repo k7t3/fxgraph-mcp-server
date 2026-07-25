@@ -55,6 +55,13 @@ If `fxgraph-cli.jar` is missing, build it first — see `skills/README.md`.
 > This produces hundreds of lines of noise. Always use `--filter prop1,prop2` to specify
 > exactly which properties you need.
 
+> **The target Java runtime must include the `java.instrument` module.** fxgraph injects a
+> Java Agent into the target JVM and cannot connect if a custom `jlink`/`jpackage` runtime
+> omits `java.instrument` or `--limit-modules` hides it. The failure is reported as
+> `java.lang.module.FindException: Module java.instrument not found`. Rebuild the target
+> runtime with `java.instrument` included; adding `requires java.instrument` to the
+> application's `module-info.java` is normally unnecessary.
+
 ## Running a JavaFX Application
 
 Start the JavaFX application in the background with output redirected to a log file:

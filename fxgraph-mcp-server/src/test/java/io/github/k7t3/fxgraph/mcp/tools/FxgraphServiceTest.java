@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -78,12 +79,71 @@ class FxgraphServiceTest {
     }
 
     @Test
+    void connectApplicationExplainsMissingJavaInstrumentModule() throws Exception {
+        var failure = new Exception(
+                "Failed to load agent library: java.lang.module.FindException: "
+                        + "Module java.instrument not found");
+        when(agent.connect()).thenThrow(failure);
+
+        var result = service.connectApplication(PID);
+
+        assertThat(result)
+                .containsEntry("success", false)
+                .containsEntry("errorCode", "TARGET_RUNTIME_MISSING_JAVA_INSTRUMENT")
+                .containsEntry(
+                        "error",
+                        "Cannot connect to PID 12345 because the target Java runtime "
+                                + "does not include the java.instrument module.")
+                .containsEntry(
+                        "action",
+                        "Rebuild the target jlink/jpackage runtime with java.instrument included.");
+        assertThat(result.get("details").toString())
+                .contains("Module java.instrument not found");
+    }
+
+    @Test
+    void getStagesExplainsNestedMissingJavaInstrumentModuleFailure() throws Exception {
+        var moduleFailure = new IllegalStateException(
+                "java.lang.module.FindException: Module java.instrument not found");
+        when(agent.connect()).thenThrow(new Exception("Agent loading failed", moduleFailure));
+
+        var result = service.getStages(PID);
+
+        assertThat(result)
+                .containsEntry("success", false)
+                .containsEntry("errorCode", "TARGET_RUNTIME_MISSING_JAVA_INSTRUMENT")
+                .containsEntry(
+                        "action",
+                        "Rebuild the target jlink/jpackage runtime with java.instrument included.");
+        assertThat(result.get("details").toString())
+                .contains("Module java.instrument not found");
+    }
+
+    @Test
     void disconnectApplicationRejectsInvalidPid() {
         var result = service.disconnectApplication(-1);
 
         assertFalse((boolean) result.get("success"));
         assertEquals("PID must be a positive integer: -1", result.get("error"));
         verifyNoInteractions(agent);
+    }
+
+    @Test
+    void disconnectApplicationExplainsMissingJavaInstrumentModule() throws Exception {
+        var failure = new Exception(
+                "Failed to load agent library: java.lang.module.FindException: "
+                        + "Module java.instrument not found");
+        when(agent.connect()).thenThrow(failure);
+
+        var result = service.disconnectApplication(PID);
+
+        assertThat(result)
+                .containsEntry("success", false)
+                .containsEntry("errorCode", "TARGET_RUNTIME_MISSING_JAVA_INSTRUMENT")
+                .containsEntry(
+                        "action",
+                        "Rebuild the target jlink/jpackage runtime with java.instrument included.");
+        verify(agent).disconnectWithoutShutdown();
     }
 
     @Test
