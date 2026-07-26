@@ -15,6 +15,7 @@ class AgentJarIsolationTest {
     private static final String ORIGINAL_JACKSON_PACKAGE = "com/fasterxml/jackson/";
     private static final String ISOLATED_JACKSON_PACKAGE =
             "io/github/k7t3/fxgraph/mcp/agent/internal/jackson/";
+    private static final String PROJECT_LICENSE = "META-INF/LICENSE-fxgraph-mcp-server";
 
     @Test
     @DisplayName("Should isolate Jackson packages in the agent JAR")
@@ -27,6 +28,14 @@ class AgentJarIsolationTest {
             assertThat(entries)
                     .noneMatch(name -> name.startsWith(ORIGINAL_JACKSON_PACKAGE))
                     .anyMatch(name -> name.startsWith(ISOLATED_JACKSON_PACKAGE));
+        }
+    }
+
+    @Test
+    @DisplayName("Should include the project license in the agent JAR")
+    void shouldIncludeProjectLicenseInAgentJar() throws IOException {
+        try (var jar = new JarFile(AGENT_JAR.toFile())) {
+            assertThat(jar.getJarEntry(PROJECT_LICENSE)).isNotNull();
         }
     }
 }

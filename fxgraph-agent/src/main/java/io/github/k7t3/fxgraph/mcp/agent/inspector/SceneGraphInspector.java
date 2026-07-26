@@ -151,7 +151,7 @@ public class SceneGraphInspector {
             results.add(info);
         }
 
-        for (Node child : ChildrenGetter.getChildren(node)) {
+        for (var child : NodeHierarchy.directChildren(node)) {
             searchNodeRecursive(child, typeFilter, idFilter, textFilter, styleClassFilter, results);
         }
     }
@@ -312,8 +312,7 @@ public class SceneGraphInspector {
 
         // Children summary (just IDs and classes, no recursion)
         List<Map<String, Object>> childrenSummary = new ArrayList<>();
-        ObservableList<Node> children = ChildrenGetter.getChildren(node);
-        for (Node child : children) {
+        for (var child : NodeHierarchy.directChildren(node)) {
             Map<String, Object> childInfo = new LinkedHashMap<>();
             childInfo.put("nodeId", System.identityHashCode(child));
             childInfo.put("type", nodeClassName(child));
@@ -815,7 +814,7 @@ public class SceneGraphInspector {
         if (currentDepth < maxDepth) {
             List<Map<String, Object>> children = new ArrayList<>();
             int myId = System.identityHashCode(node);
-            for (Node child : ChildrenGetter.getChildren(node)) {
+            for (var child : NodeHierarchy.directChildren(node)) {
                 if (isInspectorNode(child)) continue;
                 children.add(serializeNodeLightweight(child, currentDepth + 1, maxDepth,
                         includeProperties, propertyFilter, includeTransforms, includeBounds, myId));
@@ -906,7 +905,7 @@ public class SceneGraphInspector {
 
     private Node searchNode(Node node, int nodeId) {
         if (System.identityHashCode(node) == nodeId) return node;
-        for (Node child : ChildrenGetter.getChildren(node)) {
+        for (var child : NodeHierarchy.directChildren(node)) {
             Node found = searchNode(child, nodeId);
             if (found != null) return found;
         }

@@ -707,4 +707,4 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 - **Java Version**: 21+
 - **Spring Boot**: 4.0.2
 - **Spring AI MCP**: 1.1.2
-- **ノードID**: `System.identityHashCode(node)` を使用（Scenic Viewの `node.hashCode()` と同等のアプローチ）
+- **ノードID**: `System.identityHashCode(node)` を使用

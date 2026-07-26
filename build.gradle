@@ -21,6 +21,13 @@ subprojects {
             targetCompatibility = JavaVersion.VERSION_21
         }
 
+        tasks.named('processResources') {
+            from(rootProject.file('LICENSE')) {
+                into 'META-INF'
+                rename { 'LICENSE-fxgraph-mcp-server' }
+            }
+        }
+
         tasks.withType(JavaCompile).configureEach {
             options.encoding = 'UTF-8'
         }
