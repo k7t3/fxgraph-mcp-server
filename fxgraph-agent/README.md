@@ -29,7 +29,7 @@ Java Instrumentation API を使用してターゲット JVM に対してアタ�
 |-----------|-------|------|
 | `agent.inspector` | `FxGraphInspectorAgent` | Java Instrumentation API エントリポイント。TCP サーバーを起動しコマンドを受け付ける |
 | `agent.inspector` | `SceneGraphInspector` | シーングラフのノード取得・プロパティ操作・スクリーンショット等の実装 |
-| `agent.inspector` | `ChildrenGetter` | `Parent#getChildren()` を反射経由で安全に取得するユーティリティ |
+| `agent.inspector` | `NodeHierarchy` | 公開 JavaFX API から直接の子ノードを不変スナップショットとして取得するユーティリティ |
 | `agent.protocol` | `AgentCommand` / `AgentResponse` | エージェント独立の JSON 通信プロトコル定義 (fxgraph-core とは別コピー) |
 
 > **注記:** `agent.protocol` は `fxgraph-core` サブプロジェクトのプロトコル定義と同一内容の独立コピーです。  
