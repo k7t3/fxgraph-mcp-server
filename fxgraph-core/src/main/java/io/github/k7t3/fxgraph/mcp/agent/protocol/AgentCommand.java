@@ -21,6 +21,7 @@ public class AgentCommand {
         REQUEST_FOCUS,
         TYPE_KEY,
         TAKE_SCREENSHOT,
+        CAPTURE_VIDEO,
         PING,
         SHUTDOWN
     }

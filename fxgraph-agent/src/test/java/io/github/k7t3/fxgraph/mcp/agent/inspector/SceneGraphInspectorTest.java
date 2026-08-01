@@ -1,6 +1,7 @@
 package io.github.k7t3.fxgraph.mcp.agent.inspector;
 
 import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.geometry.Point2D;
 import javafx.scene.Node;
@@ -23,10 +24,13 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.jcodec.api.awt.AWTFrameGrab;
+import org.jcodec.common.io.NIOUtils;
 import org.testfx.framework.junit5.ApplicationExtension;
 import org.testfx.framework.junit5.Start;
 import org.testfx.util.WaitForAsyncUtils;
@@ -36,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -681,6 +686,128 @@ class SceneGraphInspectorTest {
     }
 
     @Test
+    @DisplayName("Should capture multiple node frames as an MP4 clip")
+    void shouldCaptureNodeFramesAsMp4Clip() throws Exception {
+        // Arrange
+        var inspector = createInspector();
+        var rectangle = new Rectangle(64, 48, Color.CORNFLOWERBLUE);
+        runOnFxThread(() -> root.getChildren().setAll(rectangle));
+        var nodeId = System.identityHashCode(rectangle);
+        var output = tempVideoPath("node");
+
+        // Act
+        var response = inspector.captureVideo(Map.of(
+                "nodeId", nodeId,
+                "savePath", output.toString(),
+                "durationSeconds", 1,
+                "framesPerSecond", 2,
+                "maxWidth", 64,
+                "maxHeight", 48));
+
+        // Assert
+        assertThat(response.isSuccess()).isTrue();
+        var data = castMap(response.getData());
+        assertThat(data).containsAllEntriesOf(Map.of(
+                "mimeType", "video/mp4",
+                "codec", "H.264",
+                "targetType", "node",
+                "targetId", String.valueOf(nodeId),
+                "durationSeconds", 1,
+                "framesPerSecond", 2,
+                "frameCount", 2,
+                "width", 64,
+                "height", 48));
+        assertThat(data.get("savedPath")).isEqualTo(output.toAbsolutePath().toString());
+        assertThat(Files.size(output)).isPositive();
+        assertThat(new String(Files.readAllBytes(output), 4, 4, StandardCharsets.US_ASCII))
+                .isEqualTo("ftyp");
+    }
+
+    @Test
+    @DisplayName("Should keep MP4 frame dimensions stable when node bounds change")
+    void shouldKeepVideoFrameDimensionsStableWhenNodeBoundsChange() throws Exception {
+        // Arrange
+        var inspector = createInspector();
+        var rectangle = new Rectangle(64, 48, Color.CORNFLOWERBLUE);
+        runOnFxThread(() -> {
+            root.getChildren().setAll(rectangle);
+            var resize = new PauseTransition(Duration.millis(200));
+            resize.setOnFinished(event -> rectangle.setWidth(32));
+            resize.play();
+        });
+        var output = tempVideoPath("resizing-node");
+
+        // Act
+        var response = inspector.captureVideo(Map.of(
+                "nodeId", System.identityHashCode(rectangle),
+                "savePath", output.toString(),
+                "durationSeconds", 1,
+                "framesPerSecond", 2,
+                "maxWidth", 64,
+                "maxHeight", 48));
+
+        // Assert
+        assertThat(response.isSuccess())
+                .as(response.getError())
+                .isTrue();
+        assertThat(castMap(response.getData()))
+                .containsEntry("width", 64)
+                .containsEntry("height", 48)
+                .containsEntry("frameCount", 2);
+        try (var channel = NIOUtils.readableChannel(output.toFile())) {
+            var frameGrab = AWTFrameGrab.createAWTFrameGrab(channel);
+            var firstFrame = frameGrab.getFrame();
+            var secondFrame = frameGrab.getFrame();
+            var firstPixel = new java.awt.Color(firstFrame.getRGB(56, 24));
+            var secondPixel = new java.awt.Color(secondFrame.getRGB(56, 24));
+
+            assertThat(firstPixel.getBlue() - secondPixel.getBlue()).isGreaterThan(50);
+        }
+    }
+
+    @Test
+    @DisplayName("Should capture a Stage scene as an MP4 clip")
+    void shouldCaptureStageSceneAsMp4Clip() {
+        // Arrange
+        var inspector = createInspector();
+        var output = tempVideoPath("stage");
+        var currentStageId = stageId(stage);
+
+        // Act
+        var response = inspector.captureVideo(Map.of(
+                "stageId", currentStageId,
+                "savePath", output.toString(),
+                "durationSeconds", 1,
+                "framesPerSecond", 1));
+
+        // Assert
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(castMap(response.getData()))
+                .containsEntry("mimeType", "video/mp4")
+                .containsEntry("targetType", "scenegraph")
+                .containsEntry("targetId", currentStageId)
+                .containsEntry("frameCount", 1);
+        assertThat(output).exists();
+    }
+
+    @Test
+    @DisplayName("Should reject video clips longer than 30 seconds")
+    void shouldRejectVideoDurationOverThirtySeconds() {
+        // Arrange
+        var inspector = createInspector();
+
+        // Act
+        var response = inspector.captureVideo(Map.of(
+                "savePath", tempVideoPath("too-long").toString(),
+                "durationSeconds", 31));
+
+        // Assert
+        assertThat(response.isSuccess()).isFalse();
+        assertThat(response.getError())
+                .isEqualTo("Failed to capture video: durationSeconds must be between 1 and 30");
+    }
+
+    @Test
     void takeScreenshot_scalesWhenExceedsMaxWidth() {
         SceneGraphInspector inspector = createInspector();
         Canvas canvas = new Canvas(1920, 500);
@@ -1064,6 +1191,15 @@ class SceneGraphInspectorTest {
             return dir.resolve("screenshot-" + suffix + ".png");
         } catch (Exception e) {
             throw new AssertionError("Failed to create temp file", e);
+        }
+    }
+
+    private Path tempVideoPath(String suffix) {
+        try {
+            var directory = Files.createTempDirectory("fxgraph-video-test-");
+            return directory.resolve("clip-" + suffix + ".mp4");
+        } catch (Exception e) {
+            throw new AssertionError("Failed to create temporary video path", e);
         }
     }
 

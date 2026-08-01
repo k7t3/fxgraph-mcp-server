@@ -21,13 +21,17 @@ dependencies {
     // Jackson for JSON protocol serialization
     implementation libs.jackson.databind
 
+    // Pure-Java MP4/H.264 encoding for short video clips
+    implementation libs.jcodec.core
+    implementation libs.jcodec.javase
+
     // JavaFX - compileOnly since inspector runs inside target JVM which already has JavaFX
     compileOnly "org.openjfx:javafx-controls:${libs.versions.javafx.get()}:${javafxPlatform}"
     compileOnly "org.openjfx:javafx-graphics:${libs.versions.javafx.get()}:${javafxPlatform}"
     compileOnly "org.openjfx:javafx-base:${libs.versions.javafx.get()}:${javafxPlatform}"
 
     // Test dependencies
-    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testImplementation libs.assertj.core
     testImplementation 'org.testfx:testfx-junit5:4.0.18'
     testImplementation 'org.testfx:openjfx-monocle:21.0.2'
     testImplementation "org.openjfx:javafx-controls:${libs.versions.javafx.get()}:${javafxPlatform}"
@@ -40,6 +44,7 @@ shadowJar {
     archiveClassifier.set('')
     archiveVersion.set('')
     relocate 'com.fasterxml.jackson', 'io.github.k7t3.fxgraph.mcp.agent.internal.jackson'
+    relocate 'org.jcodec', 'io.github.k7t3.fxgraph.mcp.agent.internal.jcodec'
     mergeServiceFiles()
     manifest {
         attributes(

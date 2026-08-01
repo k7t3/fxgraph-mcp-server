@@ -25,6 +25,7 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import org.jcodec.api.awt.AWTSequenceEncoder;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -36,6 +37,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -50,6 +52,10 @@ public class SceneGraphInspector {
 
     private static final int DEFAULT_SCREENSHOT_MAX_WIDTH = 1280;
     private static final int DEFAULT_SCREENSHOT_MAX_HEIGHT = 720;
+    private static final int DEFAULT_VIDEO_DURATION_SECONDS = 5;
+    private static final int MAX_VIDEO_DURATION_SECONDS = 30;
+    private static final int DEFAULT_VIDEO_FRAMES_PER_SECOND = 10;
+    private static final int MAX_VIDEO_FRAMES_PER_SECOND = 30;
 
     /** Tracks highlighted overlay nodes so they can be removed. */
     private Node currentHighlight;
@@ -532,6 +538,93 @@ public class SceneGraphInspector {
         }
     }
 
+    /**
+     * Captures a silent MP4/H.264 clip from a node or Stage scene.
+     *
+     * <p>Frames are sampled on the JavaFX Application Thread and encoded on the requesting agent
+     * thread. The call completes only after the clip has been finalized. Existing destination files
+     * remain unchanged when capture or encoding fails.
+     *
+     * @param params capture target, destination, duration, frame rate, and maximum dimensions
+     * @return a successful response with video metadata, or an error response when validation,
+     *         target resolution, capture, or encoding fails
+     */
+    public AgentResponse captureVideo(Map<String, Object> params) {
+        try {
+            var nodeId = params != null && params.get("nodeId") != null
+                    ? ((Number) params.get("nodeId")).intValue()
+                    : null;
+            var stageId = params != null ? (String) params.get("stageId") : null;
+            var savePath = params != null ? (String) params.get("savePath") : null;
+            if (savePath == null || savePath.isBlank()) {
+                return AgentResponse.error("savePath is required");
+            }
+
+            var durationSeconds = extractBoundedInteger(
+                    params,
+                    "durationSeconds",
+                    DEFAULT_VIDEO_DURATION_SECONDS,
+                    1,
+                    MAX_VIDEO_DURATION_SECONDS);
+            var framesPerSecond = extractBoundedInteger(
+                    params,
+                    "framesPerSecond",
+                    DEFAULT_VIDEO_FRAMES_PER_SECOND,
+                    1,
+                    MAX_VIDEO_FRAMES_PER_SECOND);
+            var maxWidth = extractBoundedInteger(
+                    params,
+                    "maxWidth",
+                    DEFAULT_SCREENSHOT_MAX_WIDTH,
+                    2,
+                    Integer.MAX_VALUE);
+            var maxHeight = extractBoundedInteger(
+                    params,
+                    "maxHeight",
+                    DEFAULT_SCREENSHOT_MAX_HEIGHT,
+                    2,
+                    Integer.MAX_VALUE);
+
+            var target = runOnFxThread(() -> resolveCaptureTarget(nodeId, stageId));
+            if (target == null) {
+                return nodeId != null
+                        ? AgentResponse.error("Node not found: " + nodeId)
+                        : AgentResponse.error("Stage not found");
+            }
+
+            var result = doCaptureVideo(
+                    target,
+                    Paths.get(savePath),
+                    durationSeconds,
+                    framesPerSecond,
+                    maxWidth,
+                    maxHeight);
+            return AgentResponse.success(result);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return AgentResponse.error("Video capture was interrupted");
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to capture video: " + e.getMessage());
+        }
+    }
+
+    private int extractBoundedInteger(
+            Map<String, Object> params,
+            String key,
+            int defaultValue,
+            int minimum,
+            int maximum) {
+        if (params == null || params.get(key) == null) {
+            return defaultValue;
+        }
+        var value = ((Number) params.get(key)).intValue();
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException(
+                    key + " must be between " + minimum + " and " + maximum);
+        }
+        return value;
+    }
+
     private int extractMaxDimension(Map<String, Object> params, String key, int defaultValue) {
         if (params == null || params.get(key) == null) {
             return defaultValue;
@@ -656,6 +749,153 @@ public class SceneGraphInspector {
         return result;
     }
 
+    private Map<String, Object> doCaptureVideo(
+            CaptureTarget target,
+            Path requestedOutput,
+            int durationSeconds,
+            int framesPerSecond,
+            int maxWidth,
+            int maxHeight) throws Exception {
+        var outputPath = requestedOutput.toAbsolutePath();
+        var parent = outputPath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        var temporaryPath = Files.createTempFile(parent, ".fxgraph-video-", ".mp4");
+        var frameCount = durationSeconds * framesPerSecond;
+        var frameIntervalNanos = TimeUnit.SECONDS.toNanos(1) / framesPerSecond;
+        BufferedImage firstFrame = null;
+
+        try {
+            var encoder = AWTSequenceEncoder.createSequenceEncoder(
+                    temporaryPath.toFile(),
+                    framesPerSecond);
+            var recordingStartedAt = System.nanoTime();
+            var finished = false;
+            try {
+                for (var frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+                    waitForFrame(recordingStartedAt, frameIntervalNanos, frameIndex);
+                    var snapshot = runOnFxThread(target::snapshot);
+                    if (firstFrame == null) {
+                        firstFrame = createInitialVideoFrame(snapshot, maxWidth, maxHeight);
+                    }
+                    var frame = frameIndex == 0
+                            ? firstFrame
+                            : createVideoFrame(snapshot, firstFrame.getWidth(), firstFrame.getHeight());
+                    encoder.encodeImage(frame);
+                }
+                encoder.finish();
+                finished = true;
+            } finally {
+                if (!finished) {
+                    try {
+                        encoder.finish();
+                    } catch (Exception ignored) {
+                        // The temporary file is discarded below; this call only releases JCodec's channel.
+                    }
+                }
+            }
+
+            moveCompletedVideo(temporaryPath, outputPath);
+        } finally {
+            Files.deleteIfExists(temporaryPath);
+        }
+
+        var result = new LinkedHashMap<String, Object>();
+        result.put("mimeType", "video/mp4");
+        result.put("codec", "H.264");
+        result.put("savedPath", outputPath.toString());
+        result.put("width", firstFrame.getWidth());
+        result.put("height", firstFrame.getHeight());
+        result.put("durationSeconds", durationSeconds);
+        result.put("framesPerSecond", framesPerSecond);
+        result.put("frameCount", frameCount);
+        result.put("targetType", target.targetType());
+        result.put("targetId", target.targetId());
+        return result;
+    }
+
+    private void waitForFrame(long recordingStartedAt, long frameIntervalNanos, int frameIndex)
+            throws InterruptedException {
+        var targetTime = recordingStartedAt + (frameIntervalNanos * frameIndex);
+        var remainingNanos = targetTime - System.nanoTime();
+        if (remainingNanos > 0) {
+            TimeUnit.NANOSECONDS.sleep(remainingNanos);
+        }
+    }
+
+    private CaptureTarget resolveCaptureTarget(Integer nodeId, String stageId) {
+        if (nodeId != null) {
+            var node = findNodeById(nodeId);
+            return node != null
+                    ? new CaptureTarget(node, null, "node", String.valueOf(nodeId))
+                    : null;
+        }
+        var stage = findStage(stageId);
+        return stage != null && stage.getScene() != null
+                ? new CaptureTarget(
+                        null,
+                        stage.getScene(),
+                        "scenegraph",
+                        String.valueOf(System.identityHashCode(stage)))
+                : null;
+    }
+
+    private BufferedImage createInitialVideoFrame(WritableImage snapshot, int maxWidth, int maxHeight) {
+        var scaledSnapshot = scaleImage(snapshot, maxWidth, maxHeight);
+        var width = evenVideoDimension(
+                Math.min((int) scaledSnapshot.getWidth(), maxWidth));
+        var height = evenVideoDimension(
+                Math.min((int) scaledSnapshot.getHeight(), maxHeight));
+        return renderVideoFrame(scaledSnapshot, width, height);
+    }
+
+    private BufferedImage createVideoFrame(WritableImage snapshot, int width, int height) {
+        var scaledSnapshot = scaleImage(snapshot, width, height);
+        return renderVideoFrame(scaledSnapshot, width, height);
+    }
+
+    private BufferedImage renderVideoFrame(WritableImage scaledSnapshot, int width, int height) {
+        var frame = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
+        var graphics = frame.createGraphics();
+        try {
+            graphics.setColor(java.awt.Color.BLACK);
+            graphics.fillRect(0, 0, width, height);
+            graphics.setRenderingHint(
+                    RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            var source = toBufferedImage(scaledSnapshot);
+            var scale = Math.min(width / (double) source.getWidth(), height / (double) source.getHeight());
+            var renderedWidth = Math.max(1, (int) Math.round(source.getWidth() * scale));
+            var renderedHeight = Math.max(1, (int) Math.round(source.getHeight() * scale));
+            var x = (width - renderedWidth) / 2;
+            var y = (height - renderedHeight) / 2;
+            graphics.drawImage(source, x, y, renderedWidth, renderedHeight, null);
+        } finally {
+            graphics.dispose();
+        }
+        return frame;
+    }
+
+    private int evenVideoDimension(int dimension) {
+        if (dimension < 2) {
+            return 2;
+        }
+        return dimension % 2 == 0 ? dimension : dimension - 1;
+    }
+
+    private void moveCompletedVideo(Path temporaryPath, Path outputPath) throws IOException {
+        try {
+            Files.move(
+                    temporaryPath,
+                    outputPath,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(temporaryPath, outputPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
     private Stage findStage(String stageId) {
         ObservableList<Window> windows = Window.getWindows();
         for (Window window : windows) {
@@ -743,6 +983,15 @@ public class SceneGraphInspector {
             if (focusOwner != null) return focusOwner;
         }
         return null;
+    }
+
+    private record CaptureTarget(Node node, Scene scene, String targetType, String targetId) {
+
+        private WritableImage snapshot() {
+            return node != null
+                    ? node.snapshot(new SnapshotParameters(), null)
+                    : scene.snapshot(null);
+        }
     }
 
     private void removeHighlight() {

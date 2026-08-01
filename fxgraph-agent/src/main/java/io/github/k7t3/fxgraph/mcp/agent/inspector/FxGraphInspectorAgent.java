@@ -126,6 +126,7 @@ public class FxGraphInspectorAgent {
             case REQUEST_FOCUS -> inspector.requestFocus(command.getParams());
             case TYPE_KEY -> inspector.typeKey(command.getParams());
             case TAKE_SCREENSHOT -> inspector.takeScreenshot(command.getParams());
+            case CAPTURE_VIDEO -> inspector.captureVideo(command.getParams());
             case SHUTDOWN -> {
                 shutdown();
                 yield null;

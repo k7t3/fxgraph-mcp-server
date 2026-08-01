@@ -380,6 +380,34 @@ class FxgraphServiceTest {
     }
 
     @Test
+    void captureVideoSendsTargetTimingAndDimensions() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.captureVideo(PID, 88, "stage-1", "/tmp/clip.mp4", 12, 15, 640, 480);
+
+        var command = capturedCommand();
+        assertThat(command.getCommand()).isEqualTo(AgentCommand.CommandType.CAPTURE_VIDEO);
+        assertThat(command.getParams()).containsAllEntriesOf(Map.of(
+                "nodeId", 88,
+                "stageId", "stage-1",
+                "savePath", "/tmp/clip.mp4",
+                "durationSeconds", 12,
+                "framesPerSecond", 15,
+                "maxWidth", 640,
+                "maxHeight", 480));
+    }
+
+    @Test
+    void captureVideoOmitsAbsentOptionalParameters() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.captureVideo(PID, null, null, "/tmp/clip.mp4", null, null, null, null);
+
+        assertThat(capturedCommand().getParams())
+                .containsOnly(Map.entry("savePath", "/tmp/clip.mp4"));
+    }
+
+    @Test
     void communicationFailureReturnsPidAndClosesConnection() throws Exception {
         when(agent.sendCommand(any(AgentCommand.class)))
                 .thenThrow(new Exception("Connection closed by agent"));

@@ -267,6 +267,47 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.TAKE_SCREENSHOT, params));
     }
 
+    /**
+     * Captures a silent MP4 clip from a JavaFX node or Stage scene.
+     *
+     * <p>The injected agent records synchronously for at most 30 seconds. When both target IDs are
+     * supplied, {@code nodeId} takes precedence. Omitted timing and size limits are selected by the
+     * injected agent.
+     *
+     * @param pid target JavaFX process ID
+     * @param nodeId target node ID, or {@code null} to capture a Stage scene
+     * @param stageId target Stage ID, or {@code null} to use the first available Stage
+     * @param savePath destination path for the MP4 file
+     * @param durationSeconds clip duration from 1 through 30 seconds, or {@code null} for the default
+     * @param framesPerSecond frame rate from 1 through 30, or {@code null} for the default
+     * @param maxWidth maximum frame width, or {@code null} for the default
+     * @param maxHeight maximum frame height, or {@code null} for the default
+     * @return command result containing the saved path and encoded video metadata
+     */
+    @Tool(description = "Capture a silent MP4/H.264 video clip of a specific JavaFX node or Stage scene. Duration is limited to 30 seconds.")
+    public Map<String, Object> captureVideo(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "Target node ID (optional; takes precedence over stageId)", required = false) Integer nodeId,
+            @ToolParam(description = "Stage ID for full scene capture (optional)", required = false) String stageId,
+            @ToolParam(description = "Path to save the MP4 video clip") String savePath,
+            @ToolParam(description = "Clip duration in seconds, from 1 through 30 (default: 5)", required = false) Integer durationSeconds,
+            @ToolParam(description = "Frames per second, from 1 through 30 (default: 10)", required = false) Integer framesPerSecond,
+            @ToolParam(description = "Maximum video width (default: 1280)", required = false) Integer maxWidth,
+            @ToolParam(description = "Maximum video height (default: 720)", required = false) Integer maxHeight) {
+
+        var params = new LinkedHashMap<String, Object>();
+        if (nodeId != null) params.put("nodeId", nodeId);
+        if (stageId != null) params.put("stageId", stageId);
+        params.put("savePath", savePath);
+        if (durationSeconds != null) params.put("durationSeconds", durationSeconds);
+        if (framesPerSecond != null) params.put("framesPerSecond", framesPerSecond);
+        if (maxWidth != null) params.put("maxWidth", maxWidth);
+        if (maxHeight != null) params.put("maxHeight", maxHeight);
+
+        return sendAgentCommand(pid,
+                new AgentCommand(AgentCommand.CommandType.CAPTURE_VIDEO, params));
+    }
+
     // ===================================================
     // Internal Helper
     // ===================================================

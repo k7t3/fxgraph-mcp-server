@@ -11,6 +11,7 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 - ノードの選択とハイライト
 - ノードのクリック・フォーカス要求・キー入力（JavaFXイベントシステム）
 - ノード/シーングラフのスクリーンショット取得
+- ノード/Stage シーンの短時間 MP4 動画取得
 
 ## アーキテクチャ
 
@@ -472,6 +473,8 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 | nodeId | integer | いいえ | Target node ID (optional; if omitted, captures full scene graph) |
 | stageId | string | いいえ | Stage ID for full scene graph capture (optional) |
 | savePath | string | はい | Path to save the PNG screenshot |
+| maxWidth | integer | いいえ | Maximum screenshot width (default: 1280) |
+| maxHeight | integer | いいえ | Maximum screenshot height (default: 720) |
 
 **出力例**:
 ```json
@@ -485,6 +488,47 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
   "targetId": "123456789"
 }
 ```
+
+---
+
+### 14. captureVideo
+
+指定したノード、または Stage シーンを短い動画クリップとして取得します。録音は行いません。
+
+**説明**: Capture a silent MP4/H.264 video clip of a specific JavaFX node or Stage scene. Duration is limited to 30 seconds.
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | Process ID of the target JavaFX application |
+| nodeId | integer | いいえ | Target node ID (takes precedence over stageId) |
+| stageId | string | いいえ | Stage ID for full scene capture; first available Stage when omitted |
+| savePath | string | はい | Path to save the MP4 video clip |
+| durationSeconds | integer | いいえ | Clip duration from 1 through 30 seconds (default: 5) |
+| framesPerSecond | integer | いいえ | Frame rate from 1 through 30 (default: 10) |
+| maxWidth | integer | いいえ | Maximum video width (default: 1280) |
+| maxHeight | integer | いいえ | Maximum video height (default: 720) |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "mimeType": "video/mp4",
+  "codec": "H.264",
+  "savedPath": "/tmp/fxgraph/clip.mp4",
+  "width": 1280,
+  "height": 720,
+  "durationSeconds": 5,
+  "framesPerSecond": 10,
+  "frameCount": 50,
+  "targetType": "scenegraph",
+  "targetId": "123456789"
+}
+```
+
+録画は同期処理で、完了した MP4 が保存されてから応答します。フレームは `Node.snapshot` または
+`Scene.snapshot` で取得するため、別ウィンドウとして合成されるポップアップや OS のウィンドウ装飾は
+含まれません。
 
 ---
 

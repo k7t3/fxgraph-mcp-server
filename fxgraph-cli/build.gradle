@@ -12,6 +12,7 @@ dependencies {
     implementation libs.jackson.databind
 
     testImplementation libs.mockito.junit.jupiter
+    testImplementation libs.assertj.core
 }
 
 test {

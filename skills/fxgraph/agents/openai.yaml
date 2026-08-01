@@ -1,0 +1,4 @@
+interface:
+  display_name: "FXGraph"
+  short_description: "Inspect and test live JavaFX application UIs"
+  default_prompt: "Use $fxgraph to inspect and verify a running JavaFX application."

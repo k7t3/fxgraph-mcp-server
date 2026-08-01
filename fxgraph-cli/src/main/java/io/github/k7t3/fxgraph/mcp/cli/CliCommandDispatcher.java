@@ -56,7 +56,7 @@ public class CliCommandDispatcher {
             return CliJsonOutput.failure(
                     "No command specified after PID " + pid
                     + ". Available commands: stages, scenegraph, node-details, find-nodes, set-property,"
-                    + " select-node, click-node, focus, type-key, screenshot");
+                    + " select-node, click-node, focus, type-key, screenshot, capture-video");
         }
 
         return runWithAgent(pid, Arrays.copyOfRange(args, 1, args.length));
@@ -106,6 +106,7 @@ public class CliCommandDispatcher {
                 case "focus"        -> cmdFocus(agent, args);
                 case "type-key"     -> cmdTypeKey(agent, args);
                 case "screenshot"   -> cmdScreenshot(agent, args);
+                case "capture-video" -> cmdCaptureVideo(agent, args);
                 default             -> CliJsonOutput.failure("Unknown command: " + command);
             };
         } catch (Exception e) {
@@ -295,6 +296,33 @@ public class CliCommandDispatcher {
         AgentResponse resp = agent.sendCommand(
                 new AgentCommand(AgentCommand.CommandType.TAKE_SCREENSHOT, params));
         return outputResponse(resp);
+    }
+
+    private static int cmdCaptureVideo(JavaFxAgent agent, String[] args) throws Exception {
+        if (args.length < 2) {
+            return CliJsonOutput.failure("capture-video requires an <outputPath> argument");
+        }
+        var params = new LinkedHashMap<String, Object>();
+        params.put("savePath", args[1]);
+        for (var i = 2; i < args.length; i++) {
+            switch (args[i]) {
+                case "--nodeId" -> params.put("nodeId",
+                        Integer.parseInt(requireNext(args, ++i, "--nodeId")));
+                case "--stageId" -> params.put("stageId", requireNext(args, ++i, "--stageId"));
+                case "--durationSeconds" -> params.put("durationSeconds",
+                        Integer.parseInt(requireNext(args, ++i, "--durationSeconds")));
+                case "--framesPerSecond" -> params.put("framesPerSecond",
+                        Integer.parseInt(requireNext(args, ++i, "--framesPerSecond")));
+                case "--maxWidth" -> params.put("maxWidth",
+                        Integer.parseInt(requireNext(args, ++i, "--maxWidth")));
+                case "--maxHeight" -> params.put("maxHeight",
+                        Integer.parseInt(requireNext(args, ++i, "--maxHeight")));
+                default -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
+            }
+        }
+        var response = agent.sendCommand(
+                new AgentCommand(AgentCommand.CommandType.CAPTURE_VIDEO, params));
+        return outputResponse(response);
     }
 
     // ===================================================

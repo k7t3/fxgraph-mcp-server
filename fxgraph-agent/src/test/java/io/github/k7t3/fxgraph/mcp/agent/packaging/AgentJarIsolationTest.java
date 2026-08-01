@@ -15,6 +15,9 @@ class AgentJarIsolationTest {
     private static final String ORIGINAL_JACKSON_PACKAGE = "com/fasterxml/jackson/";
     private static final String ISOLATED_JACKSON_PACKAGE =
             "io/github/k7t3/fxgraph/mcp/agent/internal/jackson/";
+    private static final String ORIGINAL_JCODEC_PACKAGE = "org/jcodec/";
+    private static final String ISOLATED_JCODEC_PACKAGE =
+            "io/github/k7t3/fxgraph/mcp/agent/internal/jcodec/";
     private static final String PROJECT_LICENSE = "META-INF/LICENSE-fxgraph-mcp-server";
 
     @Test
@@ -28,6 +31,20 @@ class AgentJarIsolationTest {
             assertThat(entries)
                     .noneMatch(name -> name.startsWith(ORIGINAL_JACKSON_PACKAGE))
                     .anyMatch(name -> name.startsWith(ISOLATED_JACKSON_PACKAGE));
+        }
+    }
+
+    @Test
+    @DisplayName("Should isolate JCodec packages in the agent JAR")
+    void shouldIsolateJCodecPackagesInAgentJar() throws IOException {
+        try (var jar = new JarFile(AGENT_JAR.toFile())) {
+            var entries = jar.stream()
+                    .map(entry -> entry.getName())
+                    .toList();
+
+            assertThat(entries)
+                    .noneMatch(name -> name.startsWith(ORIGINAL_JCODEC_PACKAGE))
+                    .anyMatch(name -> name.startsWith(ISOLATED_JCODEC_PACKAGE));
         }
     }
 

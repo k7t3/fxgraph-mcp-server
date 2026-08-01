@@ -161,7 +161,8 @@ class McpServerStdioIntegrationTest {
                 "clickNode",
                 "requestFocus",
                 "typeKey",
-                "takeScreenshot"
+                "takeScreenshot",
+                "captureVideo"
         );
 
         for (String expected : expectedTools) {

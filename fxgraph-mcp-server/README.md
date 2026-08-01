@@ -53,6 +53,7 @@ AI から JavaFX アプリケーションを Scenic View のように検査・�
 | `requestFocus` | ノードにフォーカスを当てる |
 | `typeKey` | キー入力を送信する |
 | `takeScreenshot` | スクリーンショットを PNG で保存する |
+| `captureVideo` | 最大30秒の MP4/H.264 動画クリップを保存する |
 
 ## パッケージ構成
 

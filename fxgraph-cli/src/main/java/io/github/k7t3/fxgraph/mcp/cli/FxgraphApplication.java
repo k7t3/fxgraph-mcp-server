@@ -15,6 +15,7 @@ package io.github.k7t3.fxgraph.mcp.cli;
  *   fxgraph &lt;pid&gt; focus &lt;nodeId&gt;
  *   fxgraph &lt;pid&gt; type-key &lt;key&gt; [--nodeId N]
  *   fxgraph &lt;pid&gt; screenshot &lt;outputPath&gt; [--nodeId N] [--stageId S]
+ *   fxgraph &lt;pid&gt; capture-video &lt;outputPath&gt; [--nodeId N] [--stageId S] [--durationSeconds N]
  * </pre>
  *
  * <p>All output is JSON to stdout. Errors are written to stderr with exit code 1.
@@ -70,6 +71,15 @@ public class FxgraphApplication {
         System.err.println();
         System.err.println("  fxgraph <pid> screenshot <outputPath> [--nodeId N] [--stageId S] [--maxWidth W] [--maxHeight H]");
         System.err.println("      Save a PNG screenshot of a node or the full scene. Default max size: 1280x720.");
+        System.err.println();
+        System.err.println("  fxgraph <pid> capture-video <outputPath> [options]");
+        System.err.println("      Save a silent MP4/H.264 clip of a node or Stage scene.");
+        System.err.println("      --nodeId <id>            Target node (takes precedence over stageId)");
+        System.err.println("      --stageId <id>           Target Stage scene");
+        System.err.println("      --durationSeconds <n>    Duration from 1 through 30 (default: 5)");
+        System.err.println("      --framesPerSecond <n>    Frame rate from 1 through 30 (default: 10)");
+        System.err.println("      --maxWidth <n>           Maximum width (default: 1280)");
+        System.err.println("      --maxHeight <n>          Maximum height (default: 720)");
         System.err.println();
         System.err.println("All output is JSON. Errors are written to stderr (exit code 1).");
     }

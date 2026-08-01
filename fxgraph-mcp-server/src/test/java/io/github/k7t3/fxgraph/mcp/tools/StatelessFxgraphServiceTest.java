@@ -34,7 +34,8 @@ class StatelessFxgraphServiceTest {
             "clickNode",
             "requestFocus",
             "typeKey",
-            "takeScreenshot"
+            "takeScreenshot",
+            "captureVideo"
     );
 
     @Test

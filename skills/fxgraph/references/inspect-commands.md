@@ -29,6 +29,11 @@ $CLI discover
 - `javaFX: true` — process has JavaFX on the classpath.
 - `connected: true` — agent is already attached and listening.
 
+Inspect every candidate's `mainClass` before choosing a PID. Do not use `.[0].pid` when more than
+one JVM might be present. If discovery is empty even though a Gradle process is running, follow
+[troubleshooting.md](troubleshooting.md); the Gradle wrapper or daemon may be alive before the
+actual JavaFX application JVM starts.
+
 ---
 
 ## stages
@@ -58,6 +63,9 @@ $CLI $PID stages
 - `rootNodeId` — use this as the entry point for `scenegraph`.
 - `focused: true` — the currently active window.
 
+Only JavaFX `Stage` instances are returned. `PopupWindow` subclasses such as `ContextMenu`, a
+`MenuButton` popup, and tooltips are intentionally absent.
+
 ```bash
 # bash / zsh
 ROOT=$($CLI $PID stages | jq '.[] | select(.focused) | .rootNodeId')
@@ -70,9 +78,42 @@ $STAGE_ID = (& $CLI $PID stages | jq -r '.[] | select(.focused) | .stageId')
 
 ---
 
+## find-nodes
+
+Search Stage scene graphs without serializing the full tree.
+
+```bash
+$CLI $PID find-nodes [OPTIONS]
+```
+
+| Option | Description |
+|---|---|
+| `--type TYPE` | Match the JavaFX class simple name, such as `Button` |
+| `--id ID` | Match the node CSS ID |
+| `--text TEXT` | Match text contained by `Labeled` or `TextInputControl` nodes |
+| `--styleClass CLASS` | Match one style-class entry |
+| `--stageId ID` | Limit the search to one Stage |
+
+Combine filters to reduce ambiguity:
+
+```bash
+$CLI $PID find-nodes --type Button --text "Submit" --stageId "$STAGE_ID"
+$CLI $PID find-nodes --id submitBtn --stageId "$STAGE_ID"
+```
+
+Output is a JSON array of compact matches containing `nodeId`, `type`, and, when present, `id`,
+`text`, and `visible`.
+
+Like `scenegraph`, this command searches only `Stage` roots. It cannot find children hosted by a
+`ContextMenu` or another `PopupWindow`. Stop retrying Stage searches once that boundary is known.
+
+---
+
 ## scenegraph
 
 Retrieve the scene graph tree. Returns a compact tree by default.
+
+Traversal is limited to JavaFX `Stage` scenes. Popup scenes are not included.
 
 ```
 $CLI $PID scenegraph [OPTIONS]
@@ -201,8 +242,8 @@ $CLI $PID scenegraph | jq '[.. | select(.visible? == false)]'
 # All nodeIds (any node)
 $CLI $PID scenegraph | jq '[.. | .nodeId? // empty]'
 
-# Child types of a specific node
-$CLI $PID node-details $NODE_ID | jq '.node.children[].type'
+# Child types of a specific node; keep the property payload filtered
+$CLI $PID node-details $NODE_ID --filter visible | jq '.node.children[].type'
 
 # Get a specific property value from node-details output
 $CLI $PID node-details $NODE_ID --filter text | \
@@ -216,5 +257,6 @@ $CLI $PID node-details $NODE_ID --filter text | \
 - Start with `--depth 2` for a structural overview, then drill into interesting sub-trees.
 - Use `--filter` to keep output small when properties are not all needed.
 - `nodeId` is `System.identityHashCode()` — stable per JVM session, resets on restart.
+- After a restart, rediscover the PID, Stage ID, and node IDs together.
 - Pipe to `jq .` for pretty-printing large outputs.
 - To verify a ListView/TableView has items, use: `node-details $NODE_ID --filter items`

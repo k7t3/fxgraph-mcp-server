@@ -98,7 +98,7 @@ Call this before `type-key` when targeting a specific input field.
 
 ## type-key
 
-Send a key event to the focused node (or a specific node).
+Send a synthetic JavaFX key event to the focused node (or a specific node).
 
 ```bash
 $CLI $PID type-key ENTER
@@ -117,6 +117,11 @@ $CLI $PID type-key TAB --nodeId $NODE_ID
 ```json
 { "success": true, "typed": true }
 ```
+
+This is not native keyboard input. Treat it as best-effort and verify the application effect. For
+text fields, prefer `set-property ... text`; for activation, prefer `click-node` on the action
+control. Use TestFX, JavaFX Robot, or native automation when exact key-code or input-method behavior
+matters.
 
 ---
 
@@ -157,6 +162,61 @@ $CLI $PID screenshot ./small.png --maxWidth 640 --maxHeight 480
 - **Default max size is 1280x720 (HD).** Images exceeding these limits are scaled down proportionally.
 - `--maxWidth` and `--maxHeight` are optional. Set both to override the default HD limit.
 - Aspect ratio is always preserved during scaling.
+- Stage screenshots use `Scene.snapshot`; node screenshots use `Node.snapshot`.
+- Separately composited `PopupWindow` content (`ContextMenu`, `MenuButton` popups, tooltips) and OS
+  window decorations are not included. Use a native OS/compositor capture for that evidence.
+
+---
+
+## capture-video
+
+Capture motion in a node or Stage scene as a silent MP4/H.264 clip.
+
+```bash
+# First available Stage, using defaults: 5 seconds, 10 fps, maximum 1280x720
+$CLI $PID capture-video /tmp/clip.mp4
+
+# Specific node for 10 seconds
+$CLI $PID capture-video /tmp/node.mp4 --nodeId $NODE_ID --durationSeconds 10
+
+# Specific Stage with custom frame rate and dimensions
+$CLI $PID capture-video /tmp/stage.mp4 --stageId $STAGE_ID \
+  --durationSeconds 15 --framesPerSecond 15 --maxWidth 960 --maxHeight 540
+```
+
+| Option | Constraint | Default |
+|---|---:|---:|
+| `--nodeId ID` | Takes precedence over `--stageId` | — |
+| `--stageId ID` | Captures the first available Stage when omitted | — |
+| `--durationSeconds N` | `1` through `30` | `5` |
+| `--framesPerSecond N` | `1` through `30` | `10` |
+| `--maxWidth N` | At least `2` | `1280` |
+| `--maxHeight N` | At least `2` | `720` |
+
+**Output:**
+```json
+{
+  "success": true,
+  "savedPath": "/tmp/clip.mp4",
+  "width": 1280,
+  "height": 720,
+  "mimeType": "video/mp4",
+  "codec": "H.264",
+  "durationSeconds": 5,
+  "framesPerSecond": 10,
+  "frameCount": 50,
+  "targetType": "scenegraph",
+  "targetId": "123456"
+}
+```
+
+- Recording is synchronous; the command returns after the finalized MP4 has been written.
+- Output is silent. Use a native screen recorder when audio or OS-composited content is required.
+- Frames use the same `Node.snapshot` or `Scene.snapshot` boundary as `screenshot`, so separate
+  popups and window decorations are excluded.
+- Frame dimensions stay fixed if the Stage or node changes size during recording. Smaller frames
+  are centered on a black background.
+- Prefer an absolute output path because the injected agent writes from the target JVM.
 
 ---
 
@@ -169,17 +229,13 @@ CLI="<path-to-skill>/scripts/fxgraph"
 # Windows PowerShell
 # $CLI = "<path-to-skill>\scripts\fxgraph.bat"
 
-# 1. Discover app and get PID
-# bash
-PID=$($CLI discover | jq '.[0].pid')
-# PowerShell: $PID = (& $CLI discover | jq '.[0].pid')
+# 1. Discover candidates, inspect mainClass, then set the verified PID explicitly
+$CLI discover | jq '.[] | {pid, mainClass, connected}'
+PID=12345
 
-# 2. Find target node (e.g. first TextField)
-# bash
-NODE_ID=$($CLI $PID scenegraph --props --filter text \
-  | jq '.. | select(.type? == "TextField") | .nodeId' | head -1)
-# PowerShell: $NODE_ID = (& $CLI $PID scenegraph --props --filter text `
-#   | jq '.. | select(.type? == "TextField") | .nodeId' | Select-Object -First 1)
+# 2. Find the target node narrowly and require a unique match
+NODE_ID=$($CLI $PID find-nodes --type TextField \
+  | jq -er 'if length == 1 then .[0].nodeId else error("TextField is not unique") end')
 
 # 3. Highlight to confirm the right node
 $CLI $PID select-node $NODE_ID
@@ -195,9 +251,9 @@ $CLI $PID set-property $NODE_ID text "new value"
 $CLI $PID focus $NODE_ID
 $CLI $PID type-key ENTER
 
-# 7. Click a button
-BUTTON_ID=$($CLI $PID scenegraph --props --filter text \
-  | jq '.. | select(.type? == "Button" and .properties.text? == "Submit") | .nodeId')
+# 7. Click a uniquely identified button
+BUTTON_ID=$($CLI $PID find-nodes --type Button --text "Submit" \
+  | jq -er 'if length == 1 then .[0].nodeId else error("Submit button is not unique") end')
 $CLI $PID click-node $BUTTON_ID
 
 # 8. After screenshot for verification
@@ -215,4 +271,4 @@ $CLI $PID select-node 0
 - `select-node` before and after changes provides a quick visual confirmation.
 - `click-node` fires a simulated JavaFX event — the node must be part of a live scene.
 - For text input fields, prefer `set-property text "..."` for reliability over `type-key` character-by-character.
-- Use `focus` + `type-key ENTER` to submit forms without needing to locate the submit button.
+- Prefer locating and clicking the submit control over relying on synthetic Enter behavior.

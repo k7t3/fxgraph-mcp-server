@@ -54,6 +54,7 @@ java -jar fxgraph-cli.jar <pid> <command> [params-json]
 | `focus` | ノードにフォーカスを当てる | `<nodeId>` |
 | `type-key` | キー入力を送信 | `<key>`, `--nodeId` |
 | `screenshot` | スクリーンショットを保存 | `<path>`, `--nodeId`, `--stageId`, `--maxWidth`, `--maxHeight` |
+| `capture-video` | MP4 動画クリップを保存 | `<path>`, `--nodeId`, `--stageId`, `--durationSeconds`, `--framesPerSecond`, `--maxWidth`, `--maxHeight` |
 
 ### 使用例
 
@@ -91,6 +92,10 @@ java -jar fxgraph-cli.jar $PID type-key ENTER
 # スクリーンショット
 java -jar fxgraph-cli.jar $PID screenshot ./result.png
 java -jar fxgraph-cli.jar $PID screenshot ./node.png --nodeId $NODE_ID
+
+# 短時間動画（最大30秒、音声なし）
+java -jar fxgraph-cli.jar $PID capture-video ./clip.mp4
+java -jar fxgraph-cli.jar $PID capture-video ./node.mp4 --nodeId $NODE_ID --durationSeconds 10 --framesPerSecond 15
 ```
 
 ## 出力形式

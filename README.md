@@ -2,7 +2,7 @@
 
 生成 AI エージェントが実行中の JavaFX アプリケーションをリアルタイムに分析・操作するための MCP サーバーと Agent Skills を提供するプロジェクトです。
 
-Java Attach API でターゲット JVM にインスペクタエージェントを動的注入し、シーングラフの探索・プロパティ変更・UI 操作・スクリーンショット取得などを AI から直接実行できます。
+Java Attach API でターゲット JVM にインスペクタエージェントを動的注入し、シーングラフの探索・プロパティ変更・UI 操作・スクリーンショット／短時間動画の取得などを AI から直接実行できます。
 
 ## 機能概要
 
@@ -12,6 +12,7 @@ Java Attach API でターゲット JVM にインスペクタエージェント�
 - **UI インタラクション** — クリック・フォーカス・キー入力を JavaFX イベントシステム経由で送信
 - **ノードハイライト** — 対象ノードを視覚的なオーバーレイでハイライト表示
 - **スクリーンショット** — ノード単体またはシーン全体を PNG 保存
+- **短時間動画** — ノード単体または Stage シーンを最大30秒の MP4/H.264（音声なし）で保存
 
 ## アーキテクチャ
 
@@ -127,6 +128,7 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `requestFocus` | ノードにキーボードフォーカスを要求 |
 | `typeKey` | キー入力イベントを送信（`ENTER`・`TAB` 等のキーコード対応） |
 | `takeScreenshot` | ノードまたはシーン全体のスクリーンショットを PNG 保存 |
+| `captureVideo` | ノードまたは Stage シーンを最大30秒の MP4/H.264 で保存 |
 
 詳細な入出力スキーマは [`docs/tools-reference.md`](docs/tools-reference.md) を参照してください。
 
@@ -151,7 +153,10 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 6. takeScreenshot(pid: 12345, savePath: "/tmp/result.png")
    → { "savedPath": "/tmp/result.png", "width": 800, "height": 600 }
 
-7. disconnectApplication(pid: 12345)
+7. captureVideo(pid: 12345, savePath: "/tmp/clip.mp4", durationSeconds: 5)
+   → { "savedPath": "/tmp/clip.mp4", "mimeType": "video/mp4", "frameCount": 50 }
+
+8. disconnectApplication(pid: 12345)
    → { "success": true }
 ```
 
@@ -195,6 +200,10 @@ $CLI <PID> type-key ENTER
 # スクリーンショット
 $CLI <PID> screenshot ./result.png
 $CLI <PID> screenshot ./node.png --nodeId <NODE_ID>
+
+# 短時間動画（既定: 5秒、10fps、最大1280x720）
+$CLI <PID> capture-video ./clip.mp4
+$CLI <PID> capture-video ./node.mp4 --nodeId <NODE_ID> --durationSeconds 10
 ```
 
 > すべてのコマンドは JSON を出力します。`--json` フラグは存在しません（渡すとエラーになります）。

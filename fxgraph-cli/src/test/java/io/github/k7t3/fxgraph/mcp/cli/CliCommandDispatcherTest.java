@@ -16,6 +16,7 @@ import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -502,6 +503,41 @@ class CliCommandDispatcherTest {
         AgentCommand cmd = captureCommand();
         assertEquals(640, cmd.getParams().get("maxWidth"));
         assertEquals(480, cmd.getParams().get("maxHeight"));
+    }
+
+    @Test
+    void captureVideoSendsTargetTimingAndDimensions() throws Exception {
+        successResponse();
+
+        var code = dispatcher.dispatch(new String[]{
+                "12345", "capture-video", "/tmp/clip.mp4",
+                "--nodeId", "999",
+                "--stageId", "s1",
+                "--durationSeconds", "12",
+                "--framesPerSecond", "15",
+                "--maxWidth", "640",
+                "--maxHeight", "480"
+        });
+
+        assertThat(code).isZero();
+        var command = captureCommand();
+        assertThat(command.getCommand()).isEqualTo(AgentCommand.CommandType.CAPTURE_VIDEO);
+        assertThat(command.getParams()).containsAllEntriesOf(Map.of(
+                "savePath", "/tmp/clip.mp4",
+                "nodeId", 999,
+                "stageId", "s1",
+                "durationSeconds", 12,
+                "framesPerSecond", 15,
+                "maxWidth", 640,
+                "maxHeight", 480));
+    }
+
+    @Test
+    void captureVideoWithoutPathReturnsFailure() {
+        var code = dispatcher.dispatch(new String[]{"12345", "capture-video"});
+
+        assertThat(code).isOne();
+        assertThat(errContent.toString()).contains("capture-video requires an <outputPath>");
     }
 
     // ===================================================
