@@ -31,7 +31,8 @@ Attach API policy. Request approval for the specific blocked operation when requ
 
 ## Commands report missing nodes after an app restart
 
-PID, Stage IDs, and node IDs are session-local. Discard all cached identifiers and rerun:
+PID, window IDs in the `stageId` field, and node IDs are session-local. Discard all cached
+identifiers and rerun:
 
 ```bash
 $CLI discover
@@ -41,22 +42,26 @@ $CLI $PID find-nodes --id expectedId --stageId "$STAGE_ID"
 
 ## An open menu or tooltip is absent from inspection
 
-`stages`, `scenegraph`, and `find-nodes` traverse only `Stage` scenes. JavaFX popups such as
-`ContextMenu`, `MenuButton` popup content, and tooltips are `PopupWindow` instances and are outside
-that traversal.
+`stages`, `scenegraph`, and `find-nodes` include showing JavaFX `PopupWindow` instances such as
+`ContextMenu`, `MenuButton` popup content, and tooltips. Transient popups disappear from enumeration
+as soon as they are hidden.
 
-- Use fxgraph to inspect the owning Stage and opener control.
-- Query the opener's state, such as `showing`, when the property exists.
-- Use TestFX or another in-process UI test to locate and manipulate popup children reliably.
-- Use native UI automation only when a live external process must be exercised, and verify each
-  action rather than assuming accessibility exposure.
+- Open the popup, then immediately rerun `stages` and locate an entry whose `windowType` identifies
+  the popup and whose `ownerWindowId` matches the owning Stage.
+- Pass the popup's `stageId` to `find-nodes` or `scenegraph`; do not pass the owner's ID when looking
+  for popup children.
+- If no popup entry appears, verify that it is still showing. Focus changes and prior interactions
+  can hide menus and tooltips before the inspection command runs.
+- A platform-native menu is not a JavaFX `PopupWindow`; use approved native UI automation for that
+  case and verify each action rather than assuming accessibility exposure.
 
 ## A screenshot omits the open popup
 
-The fxgraph screenshot command snapshots a JavaFX `Scene` or `Node`; it is not a desktop capture.
-Use it for deterministic Stage content. Use the operating system's compositor screenshot facility
-when the evidence must include popup windows or window chrome. Native capture can require GUI,
-Accessibility, Screen Recording, or sandbox approval depending on the platform.
+The fxgraph screenshot command snapshots one JavaFX `Scene` or `Node`; it is not a desktop capture.
+Pass a popup's `stageId` to capture that popup scene by itself. Use the operating system's compositor
+screenshot facility when the evidence must combine an owning Stage, its popup, and window chrome.
+Native capture can require GUI, Accessibility, Screen Recording, or sandbox approval depending on
+the platform.
 
 For popup verification, retain both forms of evidence when useful:
 

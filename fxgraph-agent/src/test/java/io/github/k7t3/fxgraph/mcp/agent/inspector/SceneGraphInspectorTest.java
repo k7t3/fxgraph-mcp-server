@@ -4,16 +4,19 @@ import io.github.k7t3.fxgraph.mcp.agent.protocol.AgentResponse;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.geometry.Point2D;
+import javafx.geometry.Side;
+import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.control.Button;
-import javafx.scene.Group;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.control.PasswordField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
@@ -23,7 +26,10 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.stage.Popup;
+import javafx.stage.PopupWindow;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import javafx.util.Duration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -58,6 +64,7 @@ class SceneGraphInspectorTest {
     private Stage stage;
     private VBox root;
     private final List<Stage> extraStages = new ArrayList<>();
+    private final List<PopupWindow> extraPopups = new ArrayList<>();
 
     @Start
     private void start(Stage stage) {
@@ -71,6 +78,10 @@ class SceneGraphInspectorTest {
 
     @AfterEach
     void tearDown() {
+        for (var popup : extraPopups) {
+            runOnFxThread(popup::hide);
+        }
+        extraPopups.clear();
         for (Stage s : extraStages) {
             runOnFxThread(s::close);
         }
@@ -102,6 +113,27 @@ class SceneGraphInspectorTest {
         assertEquals(System.identityHashCode(root), stageInfo.get("rootNodeId"));
         assertTrue(((Number) stageInfo.get("width")).doubleValue() > 0);
         assertTrue(((Number) stageInfo.get("height")).doubleValue() > 0);
+    }
+
+    @Test
+    @DisplayName("Should list shown popup windows")
+    void shouldListShownPopupWindows() {
+        var inspector = createInspector();
+        var popup = createPopup(new Label("Popup content"));
+
+        var response = inspector.getStages();
+        var windows = castList(response.getData());
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(windows)
+                .filteredOn(info -> windowId(popup).equals(info.get("stageId")))
+                .singleElement()
+                .satisfies(info -> {
+                    assertThat(info)
+                            .containsEntry("windowType", "Popup")
+                            .containsEntry("ownerWindowId", windowId(stage))
+                            .containsEntry("rootNodeId", System.identityHashCode(popup.getScene().getRoot()));
+                });
     }
 
     @Test
@@ -201,6 +233,31 @@ class SceneGraphInspectorTest {
         assertEquals(1, stages.size());
         assertEquals(primaryId, stages.get(0).get("stageId"));
         assertNotEquals(primaryId, stageId(extra));
+    }
+
+    @Test
+    @DisplayName("Should return the scene graph for a popup window")
+    void shouldReturnSceneGraphForPopupWindow() {
+        var inspector = createInspector();
+        var popupLabel = new Label("Popup content");
+        popupLabel.setId("popupLabel");
+        var popup = createPopup(popupLabel);
+
+        var response = inspector.getScenegraph(Map.of("stageId", windowId(popup)));
+        var data = castMap(response.getData());
+        var windows = castList(data.get("stages"));
+        var rootNodes = castList(data.get("rootNodes"));
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(windows)
+                .singleElement()
+                .satisfies(info -> assertThat(info)
+                        .containsEntry("stageId", windowId(popup))
+                        .containsEntry("windowType", "Popup")
+                        .containsEntry("ownerWindowId", windowId(stage)));
+        assertThat(rootNodes)
+                .singleElement()
+                .satisfies(rootNode -> assertThat(findSerializedNodeById(rootNode, "popupLabel")).isPresent());
     }
 
     @Test
@@ -647,6 +704,25 @@ class SceneGraphInspectorTest {
     }
 
     @Test
+    @DisplayName("Should capture a popup window scene")
+    void shouldCapturePopupWindowScene() {
+        var inspector = createInspector();
+        var popup = createPopup(new Label("Popup screenshot"));
+        var output = tempPngPath("popup-window");
+
+        var response = inspector.takeScreenshot(Map.of(
+                "stageId", windowId(popup),
+                "savePath", output.toString()));
+        var data = castMap(response.getData());
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(output).exists();
+        assertThat(data)
+                .containsEntry("targetType", "scenegraph")
+                .containsEntry("targetId", windowId(popup));
+    }
+
+    @Test
     void takeScreenshot_returnsErrorForMissingNode() {
         SceneGraphInspector inspector = createInspector();
         Path output = tempPngPath("missing-node");
@@ -786,6 +862,27 @@ class SceneGraphInspectorTest {
                 .containsEntry("mimeType", "video/mp4")
                 .containsEntry("targetType", "scenegraph")
                 .containsEntry("targetId", currentStageId)
+                .containsEntry("frameCount", 1);
+        assertThat(output).exists();
+    }
+
+    @Test
+    @DisplayName("Should capture a popup window scene as an MP4 clip")
+    void shouldCapturePopupWindowSceneAsMp4Clip() {
+        var inspector = createInspector();
+        var popup = createPopup(new Label("Popup video"));
+        var output = tempVideoPath("popup-window");
+
+        var response = inspector.captureVideo(Map.of(
+                "stageId", windowId(popup),
+                "savePath", output.toString(),
+                "durationSeconds", 1,
+                "framesPerSecond", 1));
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(castMap(response.getData()))
+                .containsEntry("targetType", "scenegraph")
+                .containsEntry("targetId", windowId(popup))
                 .containsEntry("frameCount", 1);
         assertThat(output).exists();
     }
@@ -1034,6 +1131,30 @@ class SceneGraphInspectorTest {
     }
 
     @Test
+    @DisplayName("Should find nodes inside a context menu")
+    void shouldFindNodesInsideContextMenu() {
+        var inspector = createInspector();
+        var anchor = new Button("Open menu");
+        var contextMenu = new ContextMenu(new MenuItem("Popup action"));
+        runOnFxThread(() -> {
+            stage.setScene(new Scene(new VBox(anchor), 300, 200));
+            stage.show();
+            contextMenu.show(anchor, Side.BOTTOM, 0, 0);
+            extraPopups.add(contextMenu);
+        });
+
+        var response = inspector.findNodes(Map.of(
+                "text", "Popup action",
+                "stageId", windowId(contextMenu)));
+        var results = castList(response.getData());
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(results)
+                .extracting(info -> info.get("text"))
+                .contains("Popup action");
+    }
+
+    @Test
     @DisplayName("Should find nodes by style class")
     void shouldFindNodesByStyleClass() {
         SceneGraphInspector inspector = createInspector();
@@ -1174,6 +1295,18 @@ class SceneGraphInspectorTest {
         return ref.get();
     }
 
+    private Popup createPopup(Node content) {
+        var reference = new AtomicReference<Popup>();
+        runOnFxThread(() -> {
+            var popup = new Popup();
+            popup.getContent().add(content);
+            popup.show(stage, stage.getX() + 20, stage.getY() + 20);
+            extraPopups.add(popup);
+            reference.set(popup);
+        });
+        return reference.get();
+    }
+
     private boolean hasHighlight(Parent parent) {
         Optional<Node> highlight = parent.getChildrenUnmodifiable().stream()
                 .filter(node -> Objects.equals(node.getId(), "__fxgraph_highlight__"))
@@ -1182,7 +1315,29 @@ class SceneGraphInspectorTest {
     }
 
     private String stageId(Stage stage) {
-        return String.valueOf(System.identityHashCode(stage));
+        return windowId(stage);
+    }
+
+    private String windowId(Window window) {
+        return String.valueOf(System.identityHashCode(window));
+    }
+
+    private Optional<Map<String, Object>> findSerializedNodeById(
+            Map<String, Object> node,
+            String id) {
+        if (Objects.equals(node.get("id"), id)) {
+            return Optional.of(node);
+        }
+        if (!(node.get("children") instanceof List<?>)) {
+            return Optional.empty();
+        }
+        for (var child : castList(node.get("children"))) {
+            var match = findSerializedNodeById(child, id);
+            if (match.isPresent()) {
+                return match;
+            }
+        }
+        return Optional.empty();
     }
 
     private Path tempPngPath(String suffix) {

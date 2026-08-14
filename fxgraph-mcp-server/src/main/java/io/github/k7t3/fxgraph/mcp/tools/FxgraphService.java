@@ -111,16 +111,16 @@ public class FxgraphService {
     // Scene Graph Inspection
     // ===================================================
 
-    @Tool(description = "Get the list of JavaFX Stages (windows) in the connected application. Each stage has a stageId, title, dimensions, and a rootNodeId pointing to the root of its scene graph.")
+    @Tool(description = "Get the list of showing JavaFX windows, including Stages and PopupWindows such as ContextMenu and Tooltip. Each entry has a stageId (the legacy name for a window ID), windowType, dimensions, and rootNodeId. Popup entries also include ownerWindowId; Stage entries include title.")
     public Map<String, Object> getStages(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid) {
         return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.GET_STAGES));
     }
 
-    @Tool(description = "Get the scene graph tree structure from a connected JavaFX application. Returns a compact hierarchical tree by default. Use depth to limit tree depth, includeBounds to include node bounding boxes, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.")
+    @Tool(description = "Get scene graph trees for showing JavaFX Stage and PopupWindow scenes. Returns compact hierarchical trees by default. Use depth to limit tree depth, includeBounds to include node bounding boxes, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.")
     public Map<String, Object> getScenegraph(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
-            @ToolParam(description = "Stage ID to inspect (omit to get all stages)", required = false) String stageId,
+            @ToolParam(description = "Window ID from the stageId field (omit to get all showing windows)", required = false) String stageId,
             @ToolParam(description = "Maximum depth to traverse (default: unlimited)", required = false) Integer depth,
             @ToolParam(description = "Include bounding box (x,y,w,h) for each node (default: false)", required = false) Boolean includeBounds,
             @ToolParam(description = "Include property details for each node (default: false)", required = false) Boolean includeProperties,
@@ -153,14 +153,14 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.GET_NODE_DETAILS, params));
     }
 
-    @Tool(description = "Search for nodes in the JavaFX scene graph by type, CSS id, text content, or style class. Returns a list of matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.")
+    @Tool(description = "Search showing JavaFX Stage and PopupWindow scene graphs by type, CSS id, text content, or style class. Returns matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.")
     public Map<String, Object> findNodes(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "JavaFX class name to filter (e.g., 'Button', 'TextField'). Omit to match all types.", required = false) String type,
             @ToolParam(description = "CSS id (fx:id) to match exactly. Omit to match all ids.", required = false) String id,
             @ToolParam(description = "Text content to search for (case-sensitive contains match). Omit to match all text.", required = false) String text,
             @ToolParam(description = "Style class name to filter. Omit to match all style classes.", required = false) String styleClass,
-            @ToolParam(description = "Stage ID to limit search to a specific window. Omit to search all windows.", required = false) String stageId) {
+            @ToolParam(description = "Window ID from the stageId field. Omit to search all showing Stage and PopupWindow scenes.", required = false) String stageId) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         if (type != null) params.put("type", type);
@@ -247,11 +247,11 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.TYPE_KEY, params));
     }
 
-    @Tool(description = "Take a screenshot of a specific node or the whole scene graph. Saves PNG to the specified path.")
+    @Tool(description = "Take a screenshot of a specific node or one JavaFX window scene, including an individually selected popup scene. Saves PNG to the specified path.")
     public Map<String, Object> takeScreenshot(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Target node ID (optional; if omitted, captures full scene graph)", required = false) Integer nodeId,
-            @ToolParam(description = "Stage ID for full scene graph capture (optional)", required = false) String stageId,
+            @ToolParam(description = "Window ID from the stageId field for scene capture (optional; defaults to the first Stage)", required = false) String stageId,
             @ToolParam(description = "Path to save the PNG screenshot") String savePath,
             @ToolParam(description = "Maximum width for the screenshot (default: 1280)", required = false) Integer maxWidth,
             @ToolParam(description = "Maximum height for the screenshot (default: 720)", required = false) Integer maxHeight) {
@@ -268,15 +268,16 @@ public class FxgraphService {
     }
 
     /**
-     * Captures a silent MP4 clip from a JavaFX node or Stage scene.
+     * Captures a silent MP4 clip from a JavaFX node or window scene.
      *
      * <p>The injected agent records synchronously for at most 30 seconds. When both target IDs are
      * supplied, {@code nodeId} takes precedence. Omitted timing and size limits are selected by the
      * injected agent.
      *
      * @param pid target JavaFX process ID
-     * @param nodeId target node ID, or {@code null} to capture a Stage scene
-     * @param stageId target Stage ID, or {@code null} to use the first available Stage
+     * @param nodeId target node ID, or {@code null} to capture a window scene
+     * @param stageId target window ID from the {@code stageId} field, or {@code null} to use the
+     *                first available Stage
      * @param savePath destination path for the MP4 file
      * @param durationSeconds clip duration from 1 through 30 seconds, or {@code null} for the default
      * @param framesPerSecond frame rate from 1 through 30, or {@code null} for the default
@@ -284,11 +285,11 @@ public class FxgraphService {
      * @param maxHeight maximum frame height, or {@code null} for the default
      * @return command result containing the saved path and encoded video metadata
      */
-    @Tool(description = "Capture a silent MP4/H.264 video clip of a specific JavaFX node or Stage scene. Duration is limited to 30 seconds.")
+    @Tool(description = "Capture a silent MP4/H.264 video clip of a specific JavaFX node or one window scene, including an individually selected popup scene. Duration is limited to 30 seconds.")
     public Map<String, Object> captureVideo(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Target node ID (optional; takes precedence over stageId)", required = false) Integer nodeId,
-            @ToolParam(description = "Stage ID for full scene capture (optional)", required = false) String stageId,
+            @ToolParam(description = "Window ID from the stageId field for scene capture (optional; defaults to the first Stage)", required = false) String stageId,
             @ToolParam(description = "Path to save the MP4 video clip") String savePath,
             @ToolParam(description = "Clip duration in seconds, from 1 through 30 (default: 5)", required = false) Integer durationSeconds,
             @ToolParam(description = "Frames per second, from 1 through 30 (default: 10)", required = false) Integer framesPerSecond,

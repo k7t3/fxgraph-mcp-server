@@ -38,7 +38,8 @@ actual JavaFX application JVM starts.
 
 ## stages
 
-List windows (JavaFX Stages) in a running process.
+List showing JavaFX windows in a running process. This includes `Stage` and `PopupWindow`
+subclasses such as `ContextMenu` and `Tooltip`.
 
 ```bash
 $CLI $PID stages
@@ -49,6 +50,7 @@ $CLI $PID stages
 [
   {
     "stageId": "123456789",
+    "windowType": "Stage",
     "title": "Main Window",
     "width": 800,
     "height": 600,
@@ -56,15 +58,30 @@ $CLI $PID stages
     "y": 100,
     "focused": true,
     "rootNodeId": 987654321
+  },
+  {
+    "stageId": "234567890",
+    "windowType": "ContextMenu",
+    "ownerWindowId": "123456789",
+    "width": 180,
+    "height": 96,
+    "x": 240,
+    "y": 180,
+    "focused": false,
+    "rootNodeId": 876543210
   }
 ]
 ```
 
+- `stageId` — legacy field name for the ID of either a Stage or popup window.
+- `windowType` — runtime window type, for example `Stage`, `Popup`, `ContextMenu`, or `Tooltip`.
+- `ownerWindowId` — present for a popup with an owner; use it to associate the popup with its Stage.
+- `title` — present for Stage entries.
 - `rootNodeId` — use this as the entry point for `scenegraph`.
 - `focused: true` — the currently active window.
 
-Only JavaFX `Stage` instances are returned. `PopupWindow` subclasses such as `ContextMenu`, a
-`MenuButton` popup, and tooltips are intentionally absent.
+Only currently showing windows are returned. Open a transient popup before running `stages`, and
+rerun the command after every popup open or close because its ID is session-local.
 
 ```bash
 # bash / zsh
@@ -76,11 +93,18 @@ $ROOT = (& $CLI $PID stages | jq '.[] | select(.focused) | .rootNodeId')
 $STAGE_ID = (& $CLI $PID stages | jq -r '.[] | select(.focused) | .stageId')
 ```
 
+To select a popup associated with that Stage:
+
+```bash
+POPUP_ID=$($CLI $PID stages | jq -r --arg owner "$STAGE_ID" \
+  '.[] | select(.ownerWindowId == $owner) | .stageId')
+```
+
 ---
 
 ## find-nodes
 
-Search Stage scene graphs without serializing the full tree.
+Search all showing Stage and popup scene graphs without serializing the full tree.
 
 ```bash
 $CLI $PID find-nodes [OPTIONS]
@@ -92,7 +116,7 @@ $CLI $PID find-nodes [OPTIONS]
 | `--id ID` | Match the node CSS ID |
 | `--text TEXT` | Match text contained by `Labeled` or `TextInputControl` nodes |
 | `--styleClass CLASS` | Match one style-class entry |
-| `--stageId ID` | Limit the search to one Stage |
+| `--stageId ID` | Limit the search to one window; the option name is retained for compatibility |
 
 Combine filters to reduce ambiguity:
 
@@ -104,8 +128,8 @@ $CLI $PID find-nodes --id submitBtn --stageId "$STAGE_ID"
 Output is a JSON array of compact matches containing `nodeId`, `type`, and, when present, `id`,
 `text`, and `visible`.
 
-Like `scenegraph`, this command searches only `Stage` roots. It cannot find children hosted by a
-`ContextMenu` or another `PopupWindow`. Stop retrying Stage searches once that boundary is known.
+For popup content, open the popup, obtain its ID from `stages`, and pass that ID to `--stageId`.
+Without the option, the search includes all currently showing Stage and popup windows.
 
 ---
 
@@ -113,7 +137,7 @@ Like `scenegraph`, this command searches only `Stage` roots. It cannot find chil
 
 Retrieve the scene graph tree. Returns a compact tree by default.
 
-Traversal is limited to JavaFX `Stage` scenes. Popup scenes are not included.
+Traversal includes all currently showing JavaFX `Stage` and `PopupWindow` scenes.
 
 ```
 $CLI $PID scenegraph [OPTIONS]
@@ -121,7 +145,7 @@ $CLI $PID scenegraph [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--stageId ID` | Inspect a specific stage (default: all stages) |
+| `--stageId ID` | Inspect a specific window (default: all showing windows) |
 | `--depth N` | Maximum tree depth to traverse |
 | `--bounds` | Include bounding box `{ x, y, w, h }` for each node |
 | `--props` | Include property details for each node |
@@ -167,10 +191,12 @@ Field presence rules:
 **Root output structure:**
 ```json
 {
-  "stages": [{ "stageId": "123", "title": "Main Window", "rootNodeId": 987654321 }],
+  "stages": [{ "stageId": "123", "windowType": "Stage", "title": "Main Window", "rootNodeId": 987654321 }],
   "rootNodes": [ { "nodeId": 987654321, "type": "VBox", "children": [...] } ]
 }
 ```
+
+The `stages` output key is also retained for compatibility and can contain popup window entries.
 
 ---
 
@@ -257,6 +283,6 @@ $CLI $PID node-details $NODE_ID --filter text | \
 - Start with `--depth 2` for a structural overview, then drill into interesting sub-trees.
 - Use `--filter` to keep output small when properties are not all needed.
 - `nodeId` is `System.identityHashCode()` — stable per JVM session, resets on restart.
-- After a restart, rediscover the PID, Stage ID, and node IDs together.
+- After a restart, rediscover the PID, window IDs from `stageId`, and node IDs together.
 - Pipe to `jq .` for pretty-printing large outputs.
 - To verify a ListView/TableView has items, use: `node-details $NODE_ID --filter items`

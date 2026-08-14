@@ -11,7 +11,7 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 - ノードの選択とハイライト
 - ノードのクリック・フォーカス要求・キー入力（JavaFXイベントシステム）
 - ノード/シーングラフのスクリーンショット取得
-- ノード/Stage シーンの短時間 MP4 動画取得
+- ノード/任意の JavaFX ウィンドウシーンの短時間 MP4 動画取得
 
 ## アーキテクチャ
 
@@ -96,9 +96,10 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ### 4. getStages
 
-接続済みアプリケーションのステージ（ウィンドウ）一覧を取得します。
+接続済みアプリケーションで表示中のウィンドウ一覧を取得します。通常の `Stage` に加え、
+`ContextMenu`・`Tooltip` などの `PopupWindow` も含まれます。
 
-**説明**: Get the list of JavaFX Stages (windows) in the connected application. Each stage has a stageId, title, dimensions, and a rootNodeId pointing to the root of its scene graph.
+**説明**: Get the list of showing JavaFX windows, including Stages and PopupWindows such as ContextMenu and Tooltip. Each entry has a stageId (the legacy name for a window ID), windowType, dimensions, and rootNodeId. Popup entries also include ownerWindowId; Stage entries include title.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -112,6 +113,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
   "data": [
     {
       "stageId": "123456789",
+      "windowType": "Stage",
       "title": "Main Window",
       "width": 800,
       "height": 600,
@@ -119,10 +121,24 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
       "y": 100,
       "focused": true,
       "rootNodeId": 987654321
+    },
+    {
+      "stageId": "234567890",
+      "windowType": "ContextMenu",
+      "ownerWindowId": "123456789",
+      "width": 180,
+      "height": 96,
+      "x": 240,
+      "y": 180,
+      "focused": false,
+      "rootNodeId": 876543210
     }
   ]
 }
 ```
+
+`stageId` は互換性のため残された名前で、Stage とポップアップのどちらのウィンドウ ID
+にも使用します。ポップアップは表示中のみ列挙され、`ownerWindowId` で所有 Stage と対応付けられます。
 
 ---
 
@@ -130,13 +146,13 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 接続済みのJavaFXアプリケーションからシーングラフ構造を取得します。デフォルトではノードタイプ・ID・子ノードのみを含むコンパクトなツリー構造を返します。
 
-**説明**: Get the scene graph tree structure from a connected JavaFX application. Returns a compact hierarchical tree by default. Use depth to limit tree depth, includeBounds to include node bounding boxes, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.
+**説明**: Get scene graph trees for showing JavaFX Stage and PopupWindow scenes. Returns compact hierarchical trees by default. Use depth to limit tree depth, includeBounds to include node bounding boxes, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | pid | integer | はい | Process ID of the target JavaFX application |
-| stageId | string | いいえ | Stage ID to inspect (omit to get all stages) |
+| stageId | string | いいえ | Window ID from the stageId field (omit to get all showing windows) |
 | depth | integer | いいえ | Maximum depth to traverse (default: unlimited) |
 | includeBounds | boolean | いいえ | Include bounding box (x,y,w,h) for each node (default: false) |
 | includeProperties | boolean | いいえ | Include property details for each node (default: false) |
@@ -150,6 +166,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
   "stages": [
     {
       "stageId": "123456789",
+      "windowType": "Stage",
       "title": "Main Window",
       "rootNodeId": 987654321
     }
@@ -171,7 +188,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 }
 ```
 
-> **注意**: `visible: false` のノードのみ `visible` フィールドが含まれます。CSS IDが未設定のノードは `id` フィールドを持ちません。ウィンドウの位置・サイズが必要な場合は `getStages` を使用してください。
+> **注意**: `stages` キー名も互換性のため維持され、ポップアップのエントリを含む場合があります。`visible: false` のノードのみ `visible` フィールドが含まれます。CSS IDが未設定のノードは `id` フィールドを持ちません。ウィンドウの位置・サイズが必要な場合は `getStages` を使用してください。
 
 **出力例（includeBounds=true）**:
 ```json
@@ -270,9 +287,9 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ### 7. findNodes
 
-シーングラフから条件に一致するノードを検索します。タイプ・CSS ID・テキスト・スタイルクラスを組み合わせて指定できます。
+表示中の Stage とポップアップのシーングラフから条件に一致するノードを検索します。タイプ・CSS ID・テキスト・スタイルクラスを組み合わせて指定できます。
 
-**説明**: Search for nodes in the JavaFX scene graph by type, CSS id, text content, or style class. Returns a list of matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.
+**説明**: Search showing JavaFX Stage and PopupWindow scene graphs by type, CSS id, text content, or style class. Returns matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -282,7 +299,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 | id | string | いいえ | CSS id (fx:id) to match exactly |
 | text | string | いいえ | Text content to search for (case-sensitive contains match) |
 | styleClass | string | いいえ | Style class name to filter |
-| stageId | string | いいえ | Stage ID to limit search to a specific window |
+| stageId | string | いいえ | Window ID from the stageId field; omit to search all showing windows |
 
 **出力例**:
 ```json
@@ -462,16 +479,17 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ### 13. takeScreenshot
 
-指定したノード、またはシーングラフ全体のスクリーンショットを取得します。
+指定したノード、または1つの JavaFX ウィンドウシーンのスクリーンショットを取得します。
+ポップアップの ID を指定した場合は、そのポップアップシーン単体を取得します。
 
-**説明**: Take a screenshot of a specific node or the whole scene graph. Saves PNG to the specified path.
+**説明**: Take a screenshot of a specific node or one JavaFX window scene, including an individually selected popup scene. Saves PNG to the specified path.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | いいえ | Target node ID (optional; if omitted, captures full scene graph) |
-| stageId | string | いいえ | Stage ID for full scene graph capture (optional) |
+| stageId | string | いいえ | Window ID from the stageId field; first available Stage when omitted |
 | savePath | string | はい | Path to save the PNG screenshot |
 | maxWidth | integer | いいえ | Maximum screenshot width (default: 1280) |
 | maxHeight | integer | いいえ | Maximum screenshot height (default: 720) |
@@ -489,20 +507,23 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 }
 ```
 
+`Scene.snapshot` は1ウィンドウ単位です。所有 Stage とポップアップを合成した画像が必要な場合は、
+OS の画面キャプチャを使用してください。
+
 ---
 
 ### 14. captureVideo
 
-指定したノード、または Stage シーンを短い動画クリップとして取得します。録音は行いません。
+指定したノード、または1つの JavaFX ウィンドウシーンを短い動画クリップとして取得します。録音は行いません。
 
-**説明**: Capture a silent MP4/H.264 video clip of a specific JavaFX node or Stage scene. Duration is limited to 30 seconds.
+**説明**: Capture a silent MP4/H.264 video clip of a specific JavaFX node or one window scene, including an individually selected popup scene. Duration is limited to 30 seconds.
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | いいえ | Target node ID (takes precedence over stageId) |
-| stageId | string | いいえ | Stage ID for full scene capture; first available Stage when omitted |
+| stageId | string | いいえ | Window ID from the stageId field; first available Stage when omitted |
 | savePath | string | はい | Path to save the MP4 video clip |
 | durationSeconds | integer | いいえ | Clip duration from 1 through 30 seconds (default: 5) |
 | framesPerSecond | integer | いいえ | Frame rate from 1 through 30 (default: 10) |
@@ -527,8 +548,8 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 ```
 
 録画は同期処理で、完了した MP4 が保存されてから応答します。フレームは `Node.snapshot` または
-`Scene.snapshot` で取得するため、別ウィンドウとして合成されるポップアップや OS のウィンドウ装飾は
-含まれません。
+1ウィンドウの `Scene.snapshot` で取得します。ポップアップ ID を指定するとそのシーン単体を録画できますが、
+所有 Stage・別ウィンドウ・OS のウィンドウ装飾は同じ映像へ合成されません。
 
 ---
 
@@ -545,10 +566,11 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 }
 ```
 
-### StageInfo
+### WindowInfo（旧 StageInfo）
 ```json
 {
   "stageId": "123456789",
+  "windowType": "Stage",
   "title": "Window Title",
   "width": 800,
   "height": 600,
@@ -558,6 +580,8 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
   "rootNodeId": 987654321
 }
 ```
+
+`title` は Stage、`ownerWindowId` は所有ウィンドウを持つポップアップでのみ出力されます。
 
 ### SceneGraphNode
 
@@ -662,16 +686,16 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
    → { "agentPort": 54321, "success": true }
    ```
 
-3. **ステージ一覧を取得**:
+3. **表示中のウィンドウ一覧を取得**:
    ```
    getStages(pid: 12345)
-   → { "data": [{ "stageId": "123", "title": "Main Window", ... }] }
+   → { "data": [{ "stageId": "123", "windowType": "Stage", "title": "Main Window", ... }] }
    ```
 
 4. **シーングラフを取得**:
    ```
    getScenegraph(pid: 12345, depth: 3)
-   → { "stages": [{"stageId":"123","title":"Main Window","rootNodeId":987654321}], "rootNodes": [...] }
+   → { "stages": [{"stageId":"123","windowType":"Stage","title":"Main Window","rootNodeId":987654321}], "rootNodes": [...] }
    ```
 
 5. **特定ノードの詳細を取得**:

@@ -2,11 +2,11 @@
 name: fxgraph
 description: >
   Inspect, debug, test, and interact with a live JavaFX application through the bundled fxgraph
-  CLI. Use for discovering the correct JavaFX JVM, listing Stages, searching and inspecting scene
-  graph nodes, changing properties, sending synthetic interactions, highlighting nodes, taking
-  node or Stage screenshots, and capturing short video clips. Also use when live JavaFX verification
-  is blocked by application startup, Attach API permissions, stale node IDs, or JavaFX popup and
-  screenshot limitations.
+  CLI. Use for discovering the correct JavaFX JVM, listing Stage and PopupWindow scenes, searching
+  and inspecting scene graph nodes, changing properties, sending synthetic interactions,
+  highlighting nodes, taking node or window screenshots, and capturing short video clips. Also use
+  when live JavaFX verification is blocked by application startup, Attach API permissions, stale
+  node IDs, or JavaFX popup and screenshot limitations.
 ---
 
 # fxgraph
@@ -39,17 +39,17 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 |---|---|---|
 | Nodes in a JavaFX `Stage` scene | Inspect and interact | — |
 | Additional windows implemented as `Stage` | Inspect with `stages` and `--stageId` | — |
-| `PopupWindow`, `ContextMenu`, `MenuButton` popup contents, tooltips | Not enumerated; traversal is Stage-rooted | TestFX or another in-process UI test for child lookup and interaction |
-| Node or Stage scene image | `screenshot` | — |
-| Node or Stage scene motion (up to 30 seconds) | `capture-video` | — |
+| Showing `PopupWindow`, `ContextMenu`, `MenuButton` popup contents, tooltips | Inspect and interact with the popup's `stageId` | Open the popup before inspection |
+| Node or individual window scene image | `screenshot` | — |
+| Node or individual window scene motion (up to 30 seconds) | `capture-video` | — |
 | One image containing separately composited popups or OS decorations | Not captured by scene snapshots | Native OS/compositor screenshot |
 | Native mouse and keyboard behavior | Not provided; events are synthetic | TestFX, JavaFX Robot, or approved native UI automation |
 
-For a popup workflow, keep using fxgraph for the owning Stage and the control that opens the popup.
-Inspect properties such as `showing` when available. Do not repeatedly search `stages`,
-`scenegraph`, or `find-nodes` for popup children after confirming the UI is a `PopupWindow` or
-`ContextMenu`. Verify repeatable popup behavior with an in-process UI test, and verify the final
-composited appearance with an OS screenshot. Request Accessibility, Screen Recording, GUI, or
+For a popup workflow, open the popup first, then rerun `stages`. Popup entries expose `windowType`
+and `ownerWindowId`; the legacy `stageId` field identifies both Stage and popup windows. Use that ID
+with `find-nodes`, `scenegraph`, `screenshot`, or `capture-video`. A popup is enumerable only while
+it is showing. Scene snapshots capture one window at a time, so verify a final image containing both
+the owner and its popup with an OS screenshot. Request Accessibility, Screen Recording, GUI, or
 sandbox approval only if the chosen native operation is blocked.
 
 ## Start the actual JavaFX JVM
@@ -91,12 +91,13 @@ Choose `PID` by the expected main class and, when needed, confirm its Stage titl
 
 ```bash
 PID=12345
-"$CLI" "$PID" stages | jq '.[] | {stageId, title, focused, rootNodeId}'
+"$CLI" "$PID" stages | jq '.[] | {stageId, windowType, title, ownerWindowId, focused, rootNodeId}'
 STAGE_ID="123456789"
 ```
 
-Choose a Stage by title and focus state. A focused Stage is a useful signal, not sufficient proof
-when several applications or windows exist.
+Choose a Stage by `windowType`, title, and focus state. Choose a popup by `windowType` and
+`ownerWindowId`. A focused Stage is a useful signal, not sufficient proof when several applications
+or windows exist.
 
 ## Use the narrow inspection workflow
 
@@ -135,8 +136,8 @@ deterministic text entry; `click-node` and `type-key` send synthetic JavaFX even
 - `--props` belongs only to `scenegraph`; combine it with `--filter` to limit properties.
 - Always pass `--filter` to `node-details` unless a complete 60+ property dump is explicitly needed.
 - `properties` is an array of `{name, value, type, writable, category}`, not a flat object.
-- Treat `nodeId` as valid only for the current JVM session. After restart, rerun `discover`,
-  `stages`, and `find-nodes`; do not reuse PID, Stage ID, or node ID values.
+- Treat IDs as valid only for the current JVM session. After restart, rerun `discover`, `stages`,
+  and `find-nodes`; do not reuse PID, window IDs from `stageId`, or node IDs.
 - Inspect JSON error output and exit status before continuing.
 - Verify changes through application state, a focused property query, a suitable screenshot, or a
   combination of them.

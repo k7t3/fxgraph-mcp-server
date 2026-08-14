@@ -23,6 +23,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.layout.Region;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
+import javafx.stage.PopupWindow;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.jcodec.api.awt.AWTSequenceEncoder;
@@ -70,8 +71,8 @@ public class SceneGraphInspector {
 
     public AgentResponse getStages() {
         try {
-            List<Map<String, Object>> stages = runOnFxThread(this::collectStages);
-            return AgentResponse.success(stages);
+            List<Map<String, Object>> windows = runOnFxThread(this::collectWindows);
+            return AgentResponse.success(windows);
         } catch (Exception e) {
             return AgentResponse.error("Failed to get stages: " + e.getMessage());
         }
@@ -105,11 +106,10 @@ public class SceneGraphInspector {
         ObservableList<Window> windows = Window.getWindows();
 
         for (Window window : windows) {
-            if (!(window instanceof Stage stage)) continue;
-            Scene scene = stage.getScene();
+            Scene scene = window.getScene();
             if (scene == null || scene.getRoot() == null) continue;
 
-            String stageId = String.valueOf(System.identityHashCode(stage));
+            String stageId = windowId(window);
             if (stageIdFilter != null && !stageIdFilter.equals(stageId)) continue;
 
             searchNodeRecursive(scene.getRoot(), typeFilter, idFilter, textFilter,
@@ -198,25 +198,20 @@ public class SceneGraphInspector {
         return false;
     }
 
-    private List<Map<String, Object>> collectStages() {
+    private List<Map<String, Object>> collectWindows() {
         List<Map<String, Object>> result = new ArrayList<>();
         ObservableList<Window> windows = Window.getWindows();
         for (Window window : windows) {
-            if (window instanceof Stage stage) {
-                Scene scene = stage.getScene();
-                if (scene == null || scene.getRoot() == null) continue;
+            Scene scene = window.getScene();
+            if (scene == null || scene.getRoot() == null) continue;
 
-                Map<String, Object> stageInfo = new LinkedHashMap<>();
-                stageInfo.put("stageId", String.valueOf(System.identityHashCode(stage)));
-                stageInfo.put("title", stage.getTitle());
-                stageInfo.put("width", stage.getWidth());
-                stageInfo.put("height", stage.getHeight());
-                stageInfo.put("x", stage.getX());
-                stageInfo.put("y", stage.getY());
-                stageInfo.put("focused", stage.isFocused());
-                stageInfo.put("rootNodeId", System.identityHashCode(scene.getRoot()));
-                result.add(stageInfo);
-            }
+            Map<String, Object> windowInfo = serializeWindow(window);
+            windowInfo.put("width", window.getWidth());
+            windowInfo.put("height", window.getHeight());
+            windowInfo.put("x", window.getX());
+            windowInfo.put("y", window.getY());
+            windowInfo.put("focused", window.isFocused());
+            result.add(windowInfo);
         }
         return result;
     }
@@ -254,19 +249,14 @@ public class SceneGraphInspector {
 
         ObservableList<Window> windows = Window.getWindows();
         for (Window window : windows) {
-            if (!(window instanceof Stage stage)) continue;
-            Scene scene = stage.getScene();
+            Scene scene = window.getScene();
             if (scene == null || scene.getRoot() == null) continue;
 
-            String sid = String.valueOf(System.identityHashCode(stage));
+            String sid = windowId(window);
             if (stageId != null && !stageId.equals(sid)) continue;
 
-            // Minimal stage info: position/size are available via getStages
-            Map<String, Object> stageInfo = new LinkedHashMap<>();
-            stageInfo.put("stageId", sid);
-            stageInfo.put("title", stage.getTitle());
-            stageInfo.put("rootNodeId", System.identityHashCode(scene.getRoot()));
-            stages.add(stageInfo);
+            // Position and size remain available from getStages; keep tree responses compact.
+            stages.add(serializeWindow(window));
 
             Map<String, Object> rootNode = serializeNodeLightweight(scene.getRoot(), 0, maxDepth,
                     includeProperties, propertyFilter, includeTransforms, includeBounds, null);
@@ -539,7 +529,7 @@ public class SceneGraphInspector {
     }
 
     /**
-     * Captures a silent MP4/H.264 clip from a node or Stage scene.
+     * Captures a silent MP4/H.264 clip from a node or JavaFX window scene.
      *
      * <p>Frames are sampled on the JavaFX Application Thread and encoded on the requesting agent
      * thread. The call completes only after the clip has been finalized. Existing destination files
@@ -729,11 +719,11 @@ public class SceneGraphInspector {
             targetType = "node";
             targetId = String.valueOf(nodeId);
         } else {
-            Stage stage = findStage(stageId);
-            if (stage == null || stage.getScene() == null) return null;
-            image = stage.getScene().snapshot(null);
+            Window window = findWindow(stageId);
+            if (window == null || window.getScene() == null) return null;
+            image = window.getScene().snapshot(null);
             targetType = "scenegraph";
-            targetId = String.valueOf(System.identityHashCode(stage));
+            targetId = windowId(window);
         }
 
         image = scaleImage(image, maxWidth, maxHeight);
@@ -831,13 +821,13 @@ public class SceneGraphInspector {
                     ? new CaptureTarget(node, null, "node", String.valueOf(nodeId))
                     : null;
         }
-        var stage = findStage(stageId);
-        return stage != null && stage.getScene() != null
+        var window = findWindow(stageId);
+        return window != null && window.getScene() != null
                 ? new CaptureTarget(
                         null,
-                        stage.getScene(),
+                        window.getScene(),
                         "scenegraph",
-                        String.valueOf(System.identityHashCode(stage)))
+                        windowId(window))
                 : null;
     }
 
@@ -896,14 +886,18 @@ public class SceneGraphInspector {
         }
     }
 
-    private Stage findStage(String stageId) {
+    private Window findWindow(String stageId) {
         ObservableList<Window> windows = Window.getWindows();
         for (Window window : windows) {
-            if (!(window instanceof Stage stage) || stage.getScene() == null || stage.getScene().getRoot() == null) {
+            if (window.getScene() == null || window.getScene().getRoot() == null) {
                 continue;
             }
-            if (stageId == null || stageId.equals(String.valueOf(System.identityHashCode(stage)))) {
-                return stage;
+            if (stageId != null
+                    && stageId.equals(windowId(window))) {
+                return window;
+            }
+            if (stageId == null && window instanceof Stage) {
+                return window;
             }
         }
         return null;
@@ -1174,6 +1168,36 @@ public class SceneGraphInspector {
             name = cls.getSimpleName();
         }
         return name;
+    }
+
+    private static String windowClassName(Window window) {
+        Class<?> type = window.getClass();
+        var name = type.getSimpleName();
+        while (name.isEmpty()) {
+            type = type.getSuperclass();
+            if (type == null) return "Unknown";
+            name = type.getSimpleName();
+        }
+        return name;
+    }
+
+    private static String windowId(Window window) {
+        return String.valueOf(System.identityHashCode(window));
+    }
+
+    private static Map<String, Object> serializeWindow(Window window) {
+        var scene = window.getScene();
+        var result = new LinkedHashMap<String, Object>();
+        result.put("stageId", windowId(window));
+        result.put("windowType", windowClassName(window));
+        if (window instanceof Stage stage) {
+            result.put("title", stage.getTitle());
+        }
+        if (window instanceof PopupWindow popup && popup.getOwnerWindow() != null) {
+            result.put("ownerWindowId", windowId(popup.getOwnerWindow()));
+        }
+        result.put("rootNodeId", System.identityHashCode(scene.getRoot()));
+        return result;
     }
 
     private Object formatPropertyValue(Object value) {

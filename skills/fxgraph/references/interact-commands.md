@@ -127,7 +127,8 @@ matters.
 
 ## screenshot
 
-Capture a PNG of a node, a specific stage, or the full scene.
+Capture a PNG of a node or one specific window scene. A window can be a Stage or a currently showing
+popup.
 
 ```bash
 # Full scene of the primary window (default max: 1280x720)
@@ -136,8 +137,11 @@ $CLI $PID screenshot ./screenshot.png
 # Specific node
 $CLI $PID screenshot ./node.png --nodeId $NODE_ID
 
-# Specific stage
+# Specific Stage
 $CLI $PID screenshot ./stage.png --stageId $STAGE_ID
+
+# Specific popup scene, using its ID from `stages`
+$CLI $PID screenshot ./popup.png --stageId $POPUP_ID
 
 # Custom maximum dimensions (scales proportionally if exceeded)
 $CLI $PID screenshot ./hd.png --maxWidth 1920 --maxHeight 1080
@@ -162,15 +166,16 @@ $CLI $PID screenshot ./small.png --maxWidth 640 --maxHeight 480
 - **Default max size is 1280x720 (HD).** Images exceeding these limits are scaled down proportionally.
 - `--maxWidth` and `--maxHeight` are optional. Set both to override the default HD limit.
 - Aspect ratio is always preserved during scaling.
-- Stage screenshots use `Scene.snapshot`; node screenshots use `Node.snapshot`.
-- Separately composited `PopupWindow` content (`ContextMenu`, `MenuButton` popups, tooltips) and OS
-  window decorations are not included. Use a native OS/compositor capture for that evidence.
+- Window screenshots use `Scene.snapshot`; node screenshots use `Node.snapshot`.
+- A popup ID captures that popup scene by itself. A Stage snapshot does not composite separately
+  hosted `PopupWindow` content or OS window decorations. Use a native OS/compositor capture when one
+  image must contain the Stage, popup, and decorations.
 
 ---
 
 ## capture-video
 
-Capture motion in a node or Stage scene as a silent MP4/H.264 clip.
+Capture motion in a node or one JavaFX window scene as a silent MP4/H.264 clip.
 
 ```bash
 # First available Stage, using defaults: 5 seconds, 10 fps, maximum 1280x720
@@ -182,12 +187,15 @@ $CLI $PID capture-video /tmp/node.mp4 --nodeId $NODE_ID --durationSeconds 10
 # Specific Stage with custom frame rate and dimensions
 $CLI $PID capture-video /tmp/stage.mp4 --stageId $STAGE_ID \
   --durationSeconds 15 --framesPerSecond 15 --maxWidth 960 --maxHeight 540
+
+# Specific popup scene
+$CLI $PID capture-video /tmp/popup.mp4 --stageId $POPUP_ID --durationSeconds 5
 ```
 
 | Option | Constraint | Default |
 |---|---:|---:|
 | `--nodeId ID` | Takes precedence over `--stageId` | — |
-| `--stageId ID` | Captures the first available Stage when omitted | — |
+| `--stageId ID` | Selects one Stage or popup; captures the first Stage when omitted | — |
 | `--durationSeconds N` | `1` through `30` | `5` |
 | `--framesPerSecond N` | `1` through `30` | `10` |
 | `--maxWidth N` | At least `2` | `1280` |
@@ -212,9 +220,9 @@ $CLI $PID capture-video /tmp/stage.mp4 --stageId $STAGE_ID \
 
 - Recording is synchronous; the command returns after the finalized MP4 has been written.
 - Output is silent. Use a native screen recorder when audio or OS-composited content is required.
-- Frames use the same `Node.snapshot` or `Scene.snapshot` boundary as `screenshot`, so separate
-  popups and window decorations are excluded.
-- Frame dimensions stay fixed if the Stage or node changes size during recording. Smaller frames
+- Frames use the same `Node.snapshot` or single-window `Scene.snapshot` boundary as `screenshot`,
+  so other windows and decorations are excluded.
+- Frame dimensions stay fixed if the window or node changes size during recording. Smaller frames
   are centered on a black background.
 - Prefer an absolute output path because the injected agent writes from the target JVM.
 
