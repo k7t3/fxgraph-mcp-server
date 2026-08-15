@@ -318,6 +318,29 @@ class FxgraphServiceTest {
     }
 
     @Test
+    void clickNodeSendsOptionalMode() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.clickNode(PID, 42, "synthetic");
+
+        var command = capturedCommand();
+        assertThat(command.getParams())
+                .containsEntry("nodeId", 42)
+                .containsEntry("mode", "synthetic");
+    }
+
+    @Test
+    void activateNodeSendsNodeId() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.activateNode(PID, 42);
+
+        var command = capturedCommand();
+        assertThat(command.getCommand()).isEqualTo(AgentCommand.CommandType.ACTIVATE_NODE);
+        assertThat(command.getParams()).containsEntry("nodeId", 42);
+    }
+
+    @Test
     void requestFocusSendsNodeId() throws Exception {
         stubSuccessfulMapResponse();
 

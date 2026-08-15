@@ -394,6 +394,32 @@ class CliCommandDispatcherTest {
         assertEquals(42, cmd.getParams().get("nodeId"));
     }
 
+    @Test
+    void clickNodeSendsRequestedMode() throws Exception {
+        successResponse();
+
+        var code = dispatcher.dispatch(new String[]{
+                "12345", "click-node", "42", "--mode", "synthetic"
+        });
+
+        assertThat(code).isZero();
+        assertThat(captureCommand().getParams())
+                .containsEntry("nodeId", 42)
+                .containsEntry("mode", "synthetic");
+    }
+
+    @Test
+    void activateNodeSendsCorrectNodeId() throws Exception {
+        successResponse();
+
+        var code = dispatcher.dispatch(new String[]{"12345", "activate-node", "42"});
+
+        assertThat(code).isZero();
+        var command = captureCommand();
+        assertThat(command.getCommand()).isEqualTo(AgentCommand.CommandType.ACTIVATE_NODE);
+        assertThat(command.getParams()).containsEntry("nodeId", 42);
+    }
+
     // ===================================================
     // focus
     // ===================================================

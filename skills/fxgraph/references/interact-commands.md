@@ -61,21 +61,44 @@ Use this to visually confirm you have the right node before modifying it.
 
 ## click-node
 
-Activate a `ButtonBase` through its `fire()` method, or fire a synthetic primary
-`MouseEvent.MOUSE_CLICKED` on the center of another node.
+Click the center of a node with JavaFX Robot. Robot input performs normal hit testing and sends a
+press/release gesture, allowing controls such as `TabPane` headers to handle the same event phases
+as an interactive click. If Robot is unavailable, fxgraph automatically falls back to synthetic
+`MOUSE_PRESSED`, `MOUSE_RELEASED`, and `MOUSE_CLICKED` events.
 
 ```bash
 $CLI $PID click-node $NODE_ID
+$CLI $PID click-node $NODE_ID --mode synthetic
 ```
 
 **Output:**
 ```json
-{ "success": true, "clicked": true }
+{ "success": true, "clicked": true, "mode": "robot" }
 ```
 
 - The application must be running and the node and its ancestors must be visible.
 - Disabled and zero-size nodes are rejected.
-- Fires a simulated JavaFX event, not a native OS click.
+- `--mode robot` is the default and moves the system pointer to the node center.
+- `--mode synthetic` avoids pointer movement and explicitly sends the complete synthetic gesture.
+- Automatic fallback returns `mode: "synthetic"` plus `fallbackReason`.
+
+---
+
+## activate-node
+
+Activate a `ButtonBase` through its `fire()` method without emitting mouse events.
+
+```bash
+$CLI $PID activate-node $BUTTON_NODE_ID
+```
+
+**Output:**
+```json
+{ "success": true, "activated": true }
+```
+
+Use this for deterministic action invocation when pointer hit testing and mouse handlers are not
+part of the assertion. Non-`ButtonBase` nodes are rejected.
 
 ---
 
@@ -119,9 +142,9 @@ $CLI $PID type-key TAB --nodeId $NODE_ID
 ```
 
 This is not native keyboard input. Treat it as best-effort and verify the application effect. For
-text fields, prefer `set-property ... text`; for activation, prefer `click-node` on the action
-control. Use TestFX, JavaFX Robot, or native automation when exact key-code or input-method behavior
-matters.
+text fields, prefer `set-property ... text`; for deterministic button activation, prefer
+`activate-node`. Use `click-node` when pointer behavior is material. Use TestFX or native automation
+when exact key-code or input-method behavior matters.
 
 ---
 
@@ -264,6 +287,9 @@ BUTTON_ID=$($CLI $PID find-nodes --type Button --text "Submit" \
   | jq -er 'if length == 1 then .[0].nodeId else error("Submit button is not unique") end')
 $CLI $PID click-node $BUTTON_ID
 
+# Or activate ButtonBase semantics without moving the pointer
+$CLI $PID activate-node $BUTTON_ID
+
 # 8. After screenshot for verification
 $CLI $PID screenshot ./after.png
 
@@ -277,6 +303,7 @@ $CLI $PID select-node 0
 
 - Always verify changes with a screenshot or `node-details` query.
 - `select-node` before and after changes provides a quick visual confirmation.
-- `click-node` fires a simulated JavaFX event — the node must be part of a live scene.
+- `click-node` uses JavaFX Robot by default and may move the system pointer.
+- Use `activate-node` when only a `ButtonBase` action needs verification.
 - For text input fields, prefer `set-property text "..."` for reliability over `type-key` character-by-character.
 - Prefer locating and clicking the submit control over relying on synthetic Enter behavior.

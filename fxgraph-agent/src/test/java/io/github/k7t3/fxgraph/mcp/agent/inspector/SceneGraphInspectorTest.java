@@ -15,6 +15,8 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
@@ -445,6 +447,35 @@ class SceneGraphInspectorTest {
     }
 
     @Test
+    @DisplayName("Should select a tab through its header click gesture")
+    void shouldSelectTabThroughItsHeaderClickGesture() {
+        var inspector = createInspector();
+        var firstTab = new Tab("First", new Label("First content"));
+        var secondTab = new Tab("Second", new Label("Second content"));
+        var tabPane = new TabPane(firstTab, secondTab);
+        var secondTabLabel = new AtomicReference<Label>();
+        runOnFxThread(() -> {
+            root.getChildren().setAll(tabPane);
+            root.applyCss();
+            root.layout();
+            secondTabLabel.set(tabPane.lookupAll(".tab-label").stream()
+                    .filter(Label.class::isInstance)
+                    .map(Label.class::cast)
+                    .filter(label -> "Second".equals(label.getText()))
+                    .findFirst()
+                    .orElseThrow());
+        });
+
+        var response = inspector.clickNode(Map.of(
+                "nodeId", System.identityHashCode(secondTabLabel.get())
+        ));
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(tabPane.getSelectionModel().getSelectedItem()).isSameAs(secondTab);
+    }
+
+    @Test
     void clickNode_returnsErrorForDisabledNode() {
         var inspector = createInspector();
         var button = new Button("Disabled");
@@ -495,6 +526,63 @@ class SceneGraphInspectorTest {
     }
 
     @Test
+    @DisplayName("Should send a complete synthetic click gesture when requested")
+    void shouldSendCompleteSyntheticClickGestureWhenRequested() {
+        var inspector = createInspector();
+        var rectangle = new Rectangle(20, 20);
+        var events = new ArrayList<MouseEvent>();
+        rectangle.addEventHandler(MouseEvent.ANY, event -> {
+            if (event.getEventType() == MouseEvent.MOUSE_PRESSED
+                    || event.getEventType() == MouseEvent.MOUSE_RELEASED
+                    || event.getEventType() == MouseEvent.MOUSE_CLICKED) {
+                events.add(event);
+            }
+        });
+        runOnFxThread(() -> root.getChildren().setAll(rectangle));
+
+        var response = inspector.clickNode(Map.of(
+                "nodeId", System.identityHashCode(rectangle),
+                "mode", "synthetic"
+        ));
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(castMap(response.getData())).containsEntry("mode", "synthetic");
+        assertThat(events)
+                .extracting(MouseEvent::getEventType)
+                .containsExactly(
+                        MouseEvent.MOUSE_PRESSED,
+                        MouseEvent.MOUSE_RELEASED,
+                        MouseEvent.MOUSE_CLICKED);
+        assertThat(events).allMatch(MouseEvent::isSynthesized);
+        assertThat(events.getFirst().isPrimaryButtonDown()).isTrue();
+        assertThat(events.get(1).isPrimaryButtonDown()).isFalse();
+        assertThat(events.getLast().isPrimaryButtonDown()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should fall back to a synthetic gesture when Robot is unavailable")
+    void shouldFallBackToSyntheticGestureWhenRobotIsUnavailable() {
+        var inspector = new SceneGraphInspector(point -> {
+            throw new UnsupportedOperationException("Robot is unavailable");
+        });
+        var rectangle = new Rectangle(20, 20);
+        var clicks = new AtomicInteger();
+        rectangle.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> clicks.incrementAndGet());
+        runOnFxThread(() -> root.getChildren().setAll(rectangle));
+
+        var response = inspector.clickNode(Map.of(
+                "nodeId", System.identityHashCode(rectangle)
+        ));
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(castMap(response.getData()))
+                .containsEntry("mode", "synthetic")
+                .containsEntry("fallbackReason", "Robot is unavailable");
+        assertThat(clicks).hasValue(1);
+    }
+
+    @Test
     void clickNode_createsConsistentMouseEvent() {
         var inspector = createInspector();
         var rectangle = new Rectangle(20, 20);
@@ -516,6 +604,7 @@ class SceneGraphInspectorTest {
 
         var event = clickedEvent.get();
         assertThat(response.isSuccess()).isTrue();
+        assertThat(castMap(response.getData())).containsEntry("mode", "robot");
         assertThat(event).isNotNull();
         assertThat(event.getSource()).isSameAs(rectangle);
         assertThat(event.getTarget()).isSameAs(rectangle);
@@ -529,7 +618,7 @@ class SceneGraphInspectorTest {
         assertThat(event.isPrimaryButtonDown()).isFalse();
         assertThat(event.isMiddleButtonDown()).isFalse();
         assertThat(event.isSecondaryButtonDown()).isFalse();
-        assertThat(event.isSynthesized()).isTrue();
+        assertThat(event.isSynthesized()).isFalse();
         assertThat(event.isPopupTrigger()).isFalse();
         assertThat(event.isStillSincePress()).isTrue();
     }
@@ -576,6 +665,27 @@ class SceneGraphInspectorTest {
                 "Node is not visible or has zero size: " + nodeId
         );
         assertThat(actions).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("Should activate a button without synthesizing mouse input")
+    void shouldActivateButtonWithoutSynthesizingMouseInput() {
+        var inspector = createInspector();
+        var button = new Button("Activate");
+        var actions = new AtomicInteger();
+        var mouseClicks = new AtomicInteger();
+        button.setOnAction(event -> actions.incrementAndGet());
+        button.setOnMouseClicked(event -> mouseClicks.incrementAndGet());
+        runOnFxThread(() -> root.getChildren().setAll(button));
+
+        var response = inspector.activateNode(Map.of(
+                "nodeId", System.identityHashCode(button)
+        ));
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(castMap(response.getData())).containsEntry("activated", true);
+        assertThat(actions).hasValue(1);
+        assertThat(mouseClicks).hasValue(0);
     }
 
     @Test

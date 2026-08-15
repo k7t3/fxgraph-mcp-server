@@ -159,6 +159,7 @@ class McpServerStdioIntegrationTest {
                 "setProperty",
                 "selectNode",
                 "clickNode",
+                "activateNode",
                 "requestFocus",
                 "typeKey",
                 "takeScreenshot",

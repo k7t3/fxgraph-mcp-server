@@ -43,7 +43,8 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 | Node or individual window scene image | `screenshot` | — |
 | Node or individual window scene motion (up to 30 seconds) | `capture-video` | — |
 | One image containing separately composited popups or OS decorations | Not captured by scene snapshots | Native OS/compositor screenshot |
-| Native mouse and keyboard behavior | Not provided; events are synthetic | TestFX, JavaFX Robot, or approved native UI automation |
+| JavaFX pointer click behavior | `click-node` uses JavaFX Robot and falls back to a complete synthetic gesture | Use `--mode synthetic` when pointer movement is undesirable |
+| Exact OS-specific mouse and keyboard behavior | Not guaranteed | TestFX or approved native UI automation |
 
 For a popup workflow, open the popup first, then rerun `stages`. Popup entries expose `windowType`
 and `ownerWindowId`; the legacy `stageId` field identifies both Stage and popup windows. Use that ID
@@ -128,7 +129,9 @@ If direct lookup is insufficient:
 ```
 
 Use `select-node` before a risky change when visual confirmation helps. Prefer `set-property` for
-deterministic text entry; `click-node` and `type-key` send synthetic JavaFX events, not native input.
+deterministic text entry. `click-node` moves the pointer and clicks through JavaFX Robot by default;
+use `activate-node` for a deterministic `ButtonBase.fire()` action without mouse input. `type-key`
+remains synthetic.
 
 ## Apply command invariants
 
@@ -148,6 +151,6 @@ deterministic text entry; `click-node` and `type-key` send synthetic JavaFX even
 - Read [inspect-commands.md](references/inspect-commands.md) for exhaustive options and schemas for
   `discover`, `stages`, `find-nodes`, `scenegraph`, and `node-details`.
 - Read [interact-commands.md](references/interact-commands.md) for `set-property`, `select-node`,
-  `click-node`, `focus`, `type-key`, `screenshot`, and `capture-video`.
+  `click-node`, `activate-node`, `focus`, `type-key`, `screenshot`, and `capture-video`.
 - Read [troubleshooting.md](references/troubleshooting.md) for decision trees covering empty
   discovery, attach failures, stale IDs, popup controls, and composite screenshots.

@@ -18,6 +18,7 @@ public class AgentCommand {
         SET_PROPERTY,
         SELECT_NODE,
         CLICK_NODE,
+        ACTIVATE_NODE,
         REQUEST_FOCUS,
         TYPE_KEY,
         TAKE_SCREENSHOT,

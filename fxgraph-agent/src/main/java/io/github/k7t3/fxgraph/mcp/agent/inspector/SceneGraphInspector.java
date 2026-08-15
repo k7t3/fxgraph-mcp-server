@@ -5,22 +5,24 @@ import javafx.application.Platform;
 import javafx.beans.value.ObservableValue;
 import javafx.beans.value.WritableValue;
 import javafx.collections.ObservableList;
+import javafx.event.EventType;
 import javafx.geometry.Bounds;
+import javafx.geometry.Point2D;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
+import javafx.scene.control.ButtonBase;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.image.WritablePixelFormat;
-
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.input.PickResult;
-import javafx.scene.control.ButtonBase;
-import javafx.scene.paint.Color;
 import javafx.scene.layout.Region;
+import javafx.scene.paint.Color;
+import javafx.scene.robot.Robot;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import javafx.stage.PopupWindow;
@@ -33,8 +35,8 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.nio.IntBuffer;
 import java.lang.reflect.Method;
+import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -61,8 +63,18 @@ public class SceneGraphInspector {
     /** Tracks highlighted overlay nodes so they can be removed. */
     private Node currentHighlight;
     private Parent currentHighlightParent;
+    private final RobotClicker robotClicker;
 
     public SceneGraphInspector() {
+        this(point -> {
+            var robot = new Robot();
+            robot.mouseMove(point);
+            robot.mouseClick(MouseButton.PRIMARY);
+        });
+    }
+
+    SceneGraphInspector(RobotClicker robotClicker) {
+        this.robotClicker = Objects.requireNonNull(robotClicker);
     }
 
     // =============================================
@@ -451,20 +463,68 @@ public class SceneGraphInspector {
     // CLICK_NODE / REQUEST_FOCUS / TYPE_KEY / TAKE_SCREENSHOT
     // =============================================
 
+    /**
+     * Clicks a node through JavaFX Robot or a complete synthetic mouse gesture.
+     *
+     * <p>The optional {@code mode} parameter accepts {@code robot} or {@code synthetic} and
+     * defaults to {@code robot}. Robot failures automatically fall back to synthetic input, with
+     * the effective mode and failure reason included in the successful response.
+     *
+     * @param params command parameters containing {@code nodeId} and an optional click {@code mode}
+     * @return success with the effective click mode, or an error response when validation fails
+     */
     public AgentResponse clickNode(Map<String, Object> params) {
         try {
             if (params == null || params.get("nodeId") == null) {
                 return AgentResponse.error("nodeId is required");
             }
-            int nodeId = ((Number) params.get("nodeId")).intValue();
+            var nodeId = ((Number) params.get("nodeId")).intValue();
+            var mode = ClickMode.from(params.get("mode"));
 
-            String error = runOnFxThread(() -> doClickNode(nodeId));
+            var outcome = runOnFxThread(() -> doClickNode(nodeId, mode));
+            if (outcome.error() != null) {
+                return AgentResponse.error(outcome.error());
+            }
+            if (outcome.mode() == ClickMode.ROBOT) {
+                // Robot posts platform input asynchronously; this barrier lets queued events run
+                // before the command reports success to a client that may immediately inspect state.
+                runOnFxThread(() -> null);
+            }
+            var data = new LinkedHashMap<String, Object>();
+            data.put("clicked", true);
+            data.put("mode", outcome.mode().value());
+            if (outcome.fallbackReason() != null) {
+                data.put("fallbackReason", outcome.fallbackReason());
+            }
+            return AgentResponse.success(data);
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to click node: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Activates a {@link ButtonBase} through its semantic {@link ButtonBase#fire()} action.
+     *
+     * <p>This operation does not emit mouse events. Use {@link #clickNode(Map)} when pointer input
+     * behavior is part of the interaction being tested.
+     *
+     * @param params command parameters containing the required {@code nodeId}
+     * @return success when the button action was fired, otherwise an error response
+     */
+    public AgentResponse activateNode(Map<String, Object> params) {
+        try {
+            if (params == null || params.get("nodeId") == null) {
+                return AgentResponse.error("nodeId is required");
+            }
+            var nodeId = ((Number) params.get("nodeId")).intValue();
+
+            var error = runOnFxThread(() -> doActivateNode(nodeId));
             if (error != null) {
                 return AgentResponse.error(error);
             }
-            return AgentResponse.success(Map.of("clicked", true));
+            return AgentResponse.success(Map.of("activated", true));
         } catch (Exception e) {
-            return AgentResponse.error("Failed to click node: " + e.getMessage());
+            return AgentResponse.error("Failed to activate node: " + e.getMessage());
         }
     }
 
@@ -622,7 +682,49 @@ public class SceneGraphInspector {
         return ((Number) params.get(key)).intValue();
     }
 
-    private String doClickNode(int nodeId) {
+    private ClickOutcome doClickNode(int nodeId, ClickMode mode) {
+        var node = findNodeById(nodeId);
+        if (node == null) return ClickOutcome.failure("Node not found: " + nodeId);
+        if (!isEffectivelyVisible(node)) {
+            return ClickOutcome.failure("Node is not visible: " + nodeId);
+        }
+        if (node.isDisabled()) return ClickOutcome.failure("Node is disabled: " + nodeId);
+
+        var bounds = node.getBoundsInLocal();
+        if (hasZeroSize(node, bounds)) {
+            return ClickOutcome.failure("Node is not visible or has zero size: " + nodeId);
+        }
+
+        var window = node.getScene() != null ? node.getScene().getWindow() : null;
+        if (window != null) {
+            window.requestFocus();
+        }
+
+        double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
+        double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
+        var screenCoordinates = node.localToScreen(localX, localY);
+        if (screenCoordinates == null) {
+            return ClickOutcome.failure("Node is not attached to a showing window: " + nodeId);
+        }
+
+        if (mode == ClickMode.SYNTHETIC) {
+            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY());
+            return ClickOutcome.success(mode);
+        }
+
+        try {
+            robotClicker.click(screenCoordinates);
+            return ClickOutcome.success(mode);
+        } catch (RuntimeException exception) {
+            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY());
+            var reason = exception.getMessage() != null
+                    ? exception.getMessage()
+                    : exception.getClass().getSimpleName();
+            return ClickOutcome.fallback(reason);
+        }
+    }
+
+    private String doActivateNode(int nodeId) {
         var node = findNodeById(nodeId);
         if (node == null) return "Node not found: " + nodeId;
         if (!isEffectivelyVisible(node)) return "Node is not visible: " + nodeId;
@@ -632,36 +734,95 @@ public class SceneGraphInspector {
         if (hasZeroSize(node, bounds)) {
             return "Node is not visible or has zero size: " + nodeId;
         }
-
-        var window = node.getScene() != null ? node.getScene().getWindow() : null;
-        if (window != null) {
-            window.requestFocus();
+        if (!(node instanceof ButtonBase buttonBase)) {
+            return "Node does not support semantic activation: " + nodeClassName(node);
         }
 
-        if (node instanceof ButtonBase buttonBase) {
-            buttonBase.fire();
-            return null;
-        }
-
-        double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
-        double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
-
-        var sceneCoordinates = node.localToScene(localX, localY);
-        var screenCoordinates = node.localToScreen(localX, localY);
-
-        var clickEvent = new MouseEvent(
-            MouseEvent.MOUSE_CLICKED,
-            sceneCoordinates.getX(), sceneCoordinates.getY(),
-            screenCoordinates.getX(), screenCoordinates.getY(),
-            MouseButton.PRIMARY,
-            1,
-            false, false, false, false, // modifier keys
-            false, false, false,        // buttons down after a completed click
-            true, false, true,          // synthesized, popup trigger, still since press
-            new PickResult(node, sceneCoordinates.getX(), sceneCoordinates.getY())
-        );
-        node.fireEvent(clickEvent);
+        buttonBase.fire();
         return null;
+    }
+
+    private void fireSyntheticClick(
+            Node node,
+            double localX,
+            double localY,
+            double screenX,
+            double screenY) {
+        var sceneCoordinates = node.localToScene(localX, localY);
+
+        // Control skins may implement activation on press or release rather than MOUSE_CLICKED.
+        node.fireEvent(createSyntheticMouseEvent(
+                node, MouseEvent.MOUSE_PRESSED, sceneCoordinates, screenX, screenY, true));
+        node.fireEvent(createSyntheticMouseEvent(
+                node, MouseEvent.MOUSE_RELEASED, sceneCoordinates, screenX, screenY, false));
+        node.fireEvent(createSyntheticMouseEvent(
+                node, MouseEvent.MOUSE_CLICKED, sceneCoordinates, screenX, screenY, false));
+    }
+
+    private MouseEvent createSyntheticMouseEvent(
+            Node node,
+            EventType<MouseEvent> eventType,
+            Point2D sceneCoordinates,
+            double screenX,
+            double screenY,
+            boolean primaryButtonDown) {
+        return new MouseEvent(
+                eventType,
+                sceneCoordinates.getX(), sceneCoordinates.getY(),
+                screenX, screenY,
+                MouseButton.PRIMARY,
+                1,
+                false, false, false, false,
+                primaryButtonDown, false, false,
+                true, false, true,
+                new PickResult(node, sceneCoordinates.getX(), sceneCoordinates.getY())
+        );
+    }
+
+    private enum ClickMode {
+        ROBOT("robot"),
+        SYNTHETIC("synthetic");
+
+        private final String value;
+
+        ClickMode(String value) {
+            this.value = value;
+        }
+
+        private String value() {
+            return value;
+        }
+
+        private static ClickMode from(Object value) {
+            if (value == null) {
+                return ROBOT;
+            }
+            return switch (String.valueOf(value).toLowerCase(Locale.ROOT)) {
+                case "robot" -> ROBOT;
+                case "synthetic" -> SYNTHETIC;
+                default -> throw new IllegalArgumentException(
+                        "Unsupported click mode: " + value + ". Expected robot or synthetic");
+            };
+        }
+    }
+
+    private record ClickOutcome(String error, ClickMode mode, String fallbackReason) {
+        private static ClickOutcome success(ClickMode mode) {
+            return new ClickOutcome(null, mode, null);
+        }
+
+        private static ClickOutcome fallback(String reason) {
+            return new ClickOutcome(null, ClickMode.SYNTHETIC, reason);
+        }
+
+        private static ClickOutcome failure(String error) {
+            return new ClickOutcome(error, null, null);
+        }
+    }
+
+    @FunctionalInterface
+    interface RobotClicker {
+        void click(Point2D point);
     }
 
     private boolean hasZeroSize(Node node, Bounds bounds) {

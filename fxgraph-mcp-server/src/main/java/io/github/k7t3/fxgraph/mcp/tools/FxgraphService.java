@@ -209,16 +209,50 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
 
-    @Tool(description = "Click a JavaFX node by nodeId using JavaFX Event System for simulated input.")
+    @Tool(description = "Click a JavaFX node by nodeId. Uses JavaFX Robot by default and falls back to a complete synthetic press/release/click gesture when Robot input is unavailable.")
     public Map<String, Object> clickNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
-            @ToolParam(description = "Node ID") int nodeId) {
+            @ToolParam(description = "Node ID") int nodeId,
+            @ToolParam(description = "Click mode: robot (default) or synthetic", required = false)
+                    String mode) {
 
-        Map<String, Object> params = new LinkedHashMap<>();
+        var params = new LinkedHashMap<String, Object>();
         params.put("nodeId", nodeId);
+        if (mode != null) {
+            params.put("mode", mode);
+        }
 
         return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.CLICK_NODE, params));
+    }
+
+    /**
+     * Clicks a JavaFX node using the default Robot-first mode.
+     *
+     * @param pid process ID of the target JavaFX application
+     * @param nodeId node ID in the current target JVM session
+     * @return agent response describing the delivered click mode
+     */
+    public Map<String, Object> clickNode(int pid, int nodeId) {
+        return clickNode(pid, nodeId, null);
+    }
+
+    /**
+     * Activates a {@code ButtonBase} through its semantic action without emitting mouse events.
+     *
+     * @param pid process ID of the target JavaFX application
+     * @param nodeId button node ID in the current target JVM session
+     * @return agent response describing whether activation succeeded
+     */
+    @Tool(description = "Activate a JavaFX ButtonBase by nodeId through its semantic fire action without emitting mouse events.")
+    public Map<String, Object> activateNode(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "ButtonBase node ID") int nodeId) {
+
+        return sendAgentCommand(pid, new AgentCommand(
+                AgentCommand.CommandType.ACTIVATE_NODE,
+                Map.of("nodeId", nodeId)
+        ));
     }
 
     @Tool(description = "Request keyboard focus for a JavaFX node by nodeId.")

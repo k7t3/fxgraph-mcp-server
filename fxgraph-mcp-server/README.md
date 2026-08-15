@@ -49,7 +49,8 @@ AI から JavaFX アプリケーションを Scenic View のように検査・�
 | `getNodeDetails` | 指定ノードのプロパティ詳細を取得する |
 | `setProperty` | ノードのプロパティ値を変更する |
 | `selectNode` | ノードをハイライト表示する |
-| `clickNode` | ノードをクリックする |
+| `clickNode` | JavaFX Robot または完全な合成ジェスチャーでノードをクリックする |
+| `activateNode` | マウス入力なしに `ButtonBase` を起動する |
 | `requestFocus` | ノードにフォーカスを当てる |
 | `typeKey` | キー入力を送信する |
 | `takeScreenshot` | スクリーンショットを PNG で保存する |

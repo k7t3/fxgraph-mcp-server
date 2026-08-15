@@ -11,7 +11,8 @@ package io.github.k7t3.fxgraph.mcp.cli;
  *   fxgraph &lt;pid&gt; node-details &lt;nodeId&gt; [--filter p1,p2]
  *   fxgraph &lt;pid&gt; set-property &lt;nodeId&gt; &lt;property&gt; &lt;value&gt; [--type TYPE]
  *   fxgraph &lt;pid&gt; select-node &lt;nodeId&gt; [--no-bounds]
- *   fxgraph &lt;pid&gt; click-node &lt;nodeId&gt;
+ *   fxgraph &lt;pid&gt; click-node &lt;nodeId&gt; [--mode robot|synthetic]
+ *   fxgraph &lt;pid&gt; activate-node &lt;nodeId&gt;
  *   fxgraph &lt;pid&gt; focus &lt;nodeId&gt;
  *   fxgraph &lt;pid&gt; type-key &lt;key&gt; [--nodeId N]
  *   fxgraph &lt;pid&gt; screenshot &lt;outputPath&gt; [--nodeId N] [--stageId S]
@@ -60,8 +61,11 @@ public class FxgraphApplication {
         System.err.println("  fxgraph <pid> select-node <nodeId> [--no-bounds]");
         System.err.println("      Highlight a node with a red border overlay.");
         System.err.println();
-        System.err.println("  fxgraph <pid> click-node <nodeId>");
-        System.err.println("      Fire a mouse click event on a node.");
+        System.err.println("  fxgraph <pid> click-node <nodeId> [--mode robot|synthetic]");
+        System.err.println("      Click a node with JavaFX Robot or a complete synthetic gesture.");
+        System.err.println();
+        System.err.println("  fxgraph <pid> activate-node <nodeId>");
+        System.err.println("      Fire a ButtonBase action without mouse input.");
         System.err.println();
         System.err.println("  fxgraph <pid> focus <nodeId>");
         System.err.println("      Request keyboard focus for a node.");

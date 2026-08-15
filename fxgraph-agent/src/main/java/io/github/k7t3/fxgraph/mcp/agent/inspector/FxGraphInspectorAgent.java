@@ -123,6 +123,7 @@ public class FxGraphInspectorAgent {
             case SET_PROPERTY -> inspector.setProperty(command.getParams());
             case SELECT_NODE -> inspector.selectNode(command.getParams());
             case CLICK_NODE -> inspector.clickNode(command.getParams());
+            case ACTIVATE_NODE -> inspector.activateNode(command.getParams());
             case REQUEST_FOCUS -> inspector.requestFocus(command.getParams());
             case TYPE_KEY -> inspector.typeKey(command.getParams());
             case TAKE_SCREENSHOT -> inspector.takeScreenshot(command.getParams());

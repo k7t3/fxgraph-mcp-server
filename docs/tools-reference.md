@@ -412,27 +412,53 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ### 10. clickNode
 
-指定したノードをクリック相当の操作で起動します。
+指定したノードの画面上の中央座標をクリックします。
 
-**説明**: `ButtonBase` にはコントロール固有の `fire()` を呼び出し、それ以外のノードには中央座標でプライマリボタンの合成 `MOUSE_CLICKED` イベントを送信します。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。ネイティブ OS クリックではありません。
+**説明**: 既定では JavaFX `Robot` を使ってマウスをノード中央へ移動し、プライマリボタンの press/release を送ります。`Robot` が利用できない場合は `MOUSE_PRESSED`、`MOUSE_RELEASED`、`MOUSE_CLICKED` の完全な合成ジェスチャーへ自動的にフォールバックします。`mode=synthetic` で合成ジェスチャーを明示できます。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID |
+| mode | string | いいえ | `robot`（既定）または `synthetic` |
 
 **出力例**:
 ```json
 {
   "success": true,
-  "clicked": true
+  "clicked": true,
+  "mode": "robot"
+}
+```
+
+`Robot` から合成ジェスチャーへフォールバックした場合は、`mode` が `synthetic` となり、`fallbackReason` が追加されます。
+
+---
+
+### 11. activateNode
+
+指定した `ButtonBase` をマウス入力なしに論理的に起動します。
+
+**説明**: `ButtonBase.fire()` を呼び出します。マウスハンドラやヒットテストを検証するときは `clickNode` を使用してください。
+
+**入力パラメータ**:
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | Process ID of the target JavaFX application |
+| nodeId | integer | はい | ButtonBase node ID |
+
+**出力例**:
+```json
+{
+  "success": true,
+  "activated": true
 }
 ```
 
 ---
 
-### 11. requestFocus
+### 12. requestFocus
 
 指定したノードにフォーカスを要求します。
 
@@ -454,7 +480,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ---
 
-### 12. typeKey
+### 13. typeKey
 
 キー入力イベントを送信します。
 
@@ -477,7 +503,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ---
 
-### 13. takeScreenshot
+### 14. takeScreenshot
 
 指定したノード、または1つの JavaFX ウィンドウシーンのスクリーンショットを取得します。
 ポップアップの ID を指定した場合は、そのポップアップシーン単体を取得します。
@@ -512,7 +538,7 @@ OS の画面キャプチャを使用してください。
 
 ---
 
-### 14. captureVideo
+### 15. captureVideo
 
 指定したノード、または1つの JavaFX ウィンドウシーンを短い動画クリップとして取得します。録音は行いません。
 
