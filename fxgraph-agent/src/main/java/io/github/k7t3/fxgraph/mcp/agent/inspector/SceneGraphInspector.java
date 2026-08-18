@@ -466,9 +466,10 @@ public class SceneGraphInspector {
     /**
      * Clicks a node through JavaFX Robot or a complete synthetic mouse gesture.
      *
-     * <p>The optional {@code mode} parameter accepts {@code robot} or {@code synthetic} and
-     * defaults to {@code robot}. Robot failures automatically fall back to synthetic input, with
-     * the effective mode and failure reason included in the successful response.
+     * <p>The optional {@code mode} parameter accepts {@code synthetic} or {@code robot} and
+     * defaults to {@code synthetic} so the system pointer and window focus remain unchanged.
+     * Explicit Robot failures automatically fall back to synthetic input, with the effective mode
+     * and failure reason included in the successful response.
      *
      * @param params command parameters containing {@code nodeId} and an optional click {@code mode}
      * @return success with the effective click mode, or an error response when validation fails
@@ -695,11 +696,6 @@ public class SceneGraphInspector {
             return ClickOutcome.failure("Node is not visible or has zero size: " + nodeId);
         }
 
-        var window = node.getScene() != null ? node.getScene().getWindow() : null;
-        if (window != null) {
-            window.requestFocus();
-        }
-
         double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
         double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
         var screenCoordinates = node.localToScreen(localX, localY);
@@ -710,6 +706,11 @@ public class SceneGraphInspector {
         if (mode == ClickMode.SYNTHETIC) {
             fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY());
             return ClickOutcome.success(mode);
+        }
+
+        var window = node.getScene() != null ? node.getScene().getWindow() : null;
+        if (window != null) {
+            window.requestFocus();
         }
 
         try {
@@ -795,7 +796,7 @@ public class SceneGraphInspector {
 
         private static ClickMode from(Object value) {
             if (value == null) {
-                return ROBOT;
+                return SYNTHETIC;
             }
             return switch (String.valueOf(value).toLowerCase(Locale.ROOT)) {
                 case "robot" -> ROBOT;

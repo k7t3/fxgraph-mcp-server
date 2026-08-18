@@ -209,11 +209,11 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
 
-    @Tool(description = "Click a JavaFX node by nodeId. Uses JavaFX Robot by default and falls back to a complete synthetic press/release/click gesture when Robot input is unavailable.")
+    @Tool(description = "Click a JavaFX node by nodeId. Uses a synthetic press/release/click gesture by default without moving the system pointer or changing window focus. Robot input is available explicitly.")
     public Map<String, Object> clickNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID") int nodeId,
-            @ToolParam(description = "Click mode: robot (default) or synthetic", required = false)
+            @ToolParam(description = "Click mode: synthetic (default) or robot", required = false)
                     String mode) {
 
         var params = new LinkedHashMap<String, Object>();
@@ -227,7 +227,7 @@ public class FxgraphService {
     }
 
     /**
-     * Clicks a JavaFX node using the default Robot-first mode.
+     * Clicks a JavaFX node using the non-interfering synthetic mode by default.
      *
      * @param pid process ID of the target JavaFX application
      * @param nodeId node ID in the current target JVM session

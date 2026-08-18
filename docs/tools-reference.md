@@ -412,27 +412,27 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 ### 10. clickNode
 
-指定したノードの画面上の中央座標をクリックします。
+指定したノードの中央へクリックジェスチャーを送ります。
 
-**説明**: 既定では JavaFX `Robot` を使ってマウスをノード中央へ移動し、プライマリボタンの press/release を送ります。`Robot` が利用できない場合は `MOUSE_PRESSED`、`MOUSE_RELEASED`、`MOUSE_CLICKED` の完全な合成ジェスチャーへ自動的にフォールバックします。`mode=synthetic` で合成ジェスチャーを明示できます。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。
+**説明**: 既定では `MOUSE_PRESSED`、`MOUSE_RELEASED`、`MOUSE_CLICKED` の完全な合成ジェスチャーを送り、システムポインターとウィンドウフォーカスを変更しません。`mode=robot` を明示すると JavaFX `Robot` がウィンドウへフォーカスを要求し、マウスをノード中央へ移動してプライマリボタンの press/release を送ります。明示した `Robot` が利用できない場合は合成ジェスチャーへ自動的にフォールバックします。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID |
-| mode | string | いいえ | `robot`（既定）または `synthetic` |
+| mode | string | いいえ | `synthetic`（既定）または `robot` |
 
 **出力例**:
 ```json
 {
   "success": true,
   "clicked": true,
-  "mode": "robot"
+  "mode": "synthetic"
 }
 ```
 
-`Robot` から合成ジェスチャーへフォールバックした場合は、`mode` が `synthetic` となり、`fallbackReason` が追加されます。
+明示した `Robot` から合成ジェスチャーへフォールバックした場合は、`mode` が `synthetic` となり、`fallbackReason` が追加されます。
 
 ---
 

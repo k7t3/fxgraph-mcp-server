@@ -526,6 +526,47 @@ class SceneGraphInspectorTest {
     }
 
     @Test
+    @DisplayName("Should default to a synthetic gesture without using Robot")
+    void shouldDefaultToSyntheticGestureWithoutUsingRobot() {
+        var robotClicks = new AtomicInteger();
+        var inspector = new SceneGraphInspector(point -> robotClicks.incrementAndGet());
+        var rectangle = new Rectangle(20, 20);
+        var mouseClicks = new AtomicInteger();
+        rectangle.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> mouseClicks.incrementAndGet());
+        runOnFxThread(() -> root.getChildren().setAll(rectangle));
+
+        var response = inspector.clickNode(Map.of(
+                "nodeId", System.identityHashCode(rectangle)
+        ));
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(castMap(response.getData())).containsEntry("mode", "synthetic");
+        assertThat(robotClicks).hasValue(0);
+        assertThat(mouseClicks).hasValue(1);
+    }
+
+    @Test
+    @DisplayName("Should preserve window focus for a synthetic click")
+    void shouldPreserveWindowFocusForSyntheticClick() {
+        var inspector = createInspector();
+        var rectangle = new Rectangle(20, 20);
+        runOnFxThread(() -> root.getChildren().setAll(rectangle));
+        var focusedStage = createStage(new StackPane(new Label("Focused")), "Focused");
+        runOnFxThread(focusedStage::requestFocus);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertThat(focusedStage.isFocused()).isTrue();
+
+        var response = inspector.clickNode(Map.of(
+                "nodeId", System.identityHashCode(rectangle),
+                "mode", "synthetic"
+        ));
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(focusedStage.isFocused()).isTrue();
+    }
+
+    @Test
     @DisplayName("Should send a complete synthetic click gesture when requested")
     void shouldSendCompleteSyntheticClickGestureWhenRequested() {
         var inspector = createInspector();
@@ -572,7 +613,8 @@ class SceneGraphInspectorTest {
         runOnFxThread(() -> root.getChildren().setAll(rectangle));
 
         var response = inspector.clickNode(Map.of(
-                "nodeId", System.identityHashCode(rectangle)
+                "nodeId", System.identityHashCode(rectangle),
+                "mode", "robot"
         ));
 
         assertThat(response.isSuccess()).isTrue();
@@ -599,7 +641,8 @@ class SceneGraphInspectorTest {
         });
 
         var response = inspector.clickNode(Map.of(
-                "nodeId", System.identityHashCode(rectangle)
+                "nodeId", System.identityHashCode(rectangle),
+                "mode", "robot"
         ));
 
         var event = clickedEvent.get();

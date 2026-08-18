@@ -43,7 +43,7 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 | Node or individual window scene image | `screenshot` | — |
 | Node or individual window scene motion (up to 30 seconds) | `capture-video` | — |
 | One image containing separately composited popups or OS decorations | Not captured by scene snapshots | Native OS/compositor screenshot |
-| JavaFX pointer click behavior | `click-node` uses JavaFX Robot and falls back to a complete synthetic gesture | Use `--mode synthetic` when pointer movement is undesirable |
+| JavaFX click behavior without moving the system pointer | `click-node` uses a complete synthetic gesture by default | Use `--mode robot` only when native pointer input is required |
 | Exact OS-specific mouse and keyboard behavior | Not guaranteed | TestFX or approved native UI automation |
 
 For a popup workflow, open the popup first, then rerun `stages`. Popup entries expose `windowType`
@@ -129,8 +129,9 @@ If direct lookup is insufficient:
 ```
 
 Use `select-node` before a risky change when visual confirmation helps. Prefer `set-property` for
-deterministic text entry. `click-node` moves the pointer and clicks through JavaFX Robot by default;
-use `activate-node` for a deterministic `ButtonBase.fire()` action without mouse input. `type-key`
+deterministic text entry. `click-node` sends a complete synthetic gesture by default without moving
+the pointer or changing window focus; use `--mode robot` only when native pointer input is material.
+Use `activate-node` for a deterministic `ButtonBase.fire()` action without mouse input. `type-key`
 remains synthetic.
 
 ## Apply command invariants

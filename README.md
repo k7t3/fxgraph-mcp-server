@@ -124,7 +124,7 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `findNodes` | タイプ・CSS ID・テキスト・スタイルクラスからノードを検索 |
 | `setProperty` | ノードのプロパティ値を変更（text・style・visible 等） |
 | `selectNode` | ノードを視覚的にハイライト（赤枠オーバーレイ）。`nodeId=0` で解除 |
-| `clickNode` | JavaFX Robot でノード中央をクリック。利用不可時は完全な合成クリックジェスチャーへフォールバック |
+| `clickNode` | 既定の完全な合成ジェスチャーでノードをクリック。明示指定時は JavaFX Robot を使用 |
 | `activateNode` | `ButtonBase.fire()` でマウス入力なしにボタンを起動 |
 | `requestFocus` | ノードにキーボードフォーカスを要求 |
 | `typeKey` | キー入力イベントを送信（`ENTER`・`TAB` 等のキーコード対応） |
@@ -195,7 +195,7 @@ $CLI <PID> select-node <NODE_ID>
 
 # クリック・論理起動・フォーカス・キー入力
 $CLI <PID> click-node <NODE_ID>
-$CLI <PID> click-node <NODE_ID> --mode synthetic
+$CLI <PID> click-node <NODE_ID> --mode robot
 $CLI <PID> activate-node <BUTTON_NODE_ID>
 $CLI <PID> focus <NODE_ID>
 $CLI <PID> type-key ENTER

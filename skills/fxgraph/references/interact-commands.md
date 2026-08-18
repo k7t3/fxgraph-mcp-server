@@ -61,26 +61,26 @@ Use this to visually confirm you have the right node before modifying it.
 
 ## click-node
 
-Click the center of a node with JavaFX Robot. Robot input performs normal hit testing and sends a
-press/release gesture, allowing controls such as `TabPane` headers to handle the same event phases
-as an interactive click. If Robot is unavailable, fxgraph automatically falls back to synthetic
-`MOUSE_PRESSED`, `MOUSE_RELEASED`, and `MOUSE_CLICKED` events.
+Click the center of a node with synthetic `MOUSE_PRESSED`, `MOUSE_RELEASED`, and `MOUSE_CLICKED`
+events by default. This mode does not move the system pointer or request window focus. Use
+`--mode robot` when normal platform hit testing and native pointer input are required. If explicitly
+requested Robot input is unavailable, fxgraph automatically falls back to the synthetic gesture.
 
 ```bash
 $CLI $PID click-node $NODE_ID
-$CLI $PID click-node $NODE_ID --mode synthetic
+$CLI $PID click-node $NODE_ID --mode robot
 ```
 
 **Output:**
 ```json
-{ "success": true, "clicked": true, "mode": "robot" }
+{ "success": true, "clicked": true, "mode": "synthetic" }
 ```
 
 - The application must be running and the node and its ancestors must be visible.
 - Disabled and zero-size nodes are rejected.
-- `--mode robot` is the default and moves the system pointer to the node center.
-- `--mode synthetic` avoids pointer movement and explicitly sends the complete synthetic gesture.
-- Automatic fallback returns `mode: "synthetic"` plus `fallbackReason`.
+- `--mode synthetic` is the default and sends the complete gesture without pointer or focus changes.
+- `--mode robot` requests window focus and moves the system pointer to the node center.
+- Robot fallback returns `mode: "synthetic"` plus `fallbackReason`.
 
 ---
 
@@ -303,7 +303,8 @@ $CLI $PID select-node 0
 
 - Always verify changes with a screenshot or `node-details` query.
 - `select-node` before and after changes provides a quick visual confirmation.
-- `click-node` uses JavaFX Robot by default and may move the system pointer.
+- `click-node` uses synthetic input by default without moving the system pointer or changing focus.
+- Use `click-node --mode robot` only when native pointer behavior is part of the verification.
 - Use `activate-node` when only a `ButtonBase` action needs verification.
 - For text input fields, prefer `set-property text "..."` for reliability over `type-key` character-by-character.
 - Prefer locating and clicking the submit control over relying on synthetic Enter behavior.
