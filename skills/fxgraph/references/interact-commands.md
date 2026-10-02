@@ -68,19 +68,34 @@ requested Robot input is unavailable, fxgraph automatically falls back to the sy
 
 ```bash
 $CLI $PID click-node $NODE_ID
-$CLI $PID click-node $NODE_ID --mode robot
+$CLI $PID click-node $NODE_ID --button secondary
+$CLI $PID click-node $NODE_ID --clickCount 2
+$CLI $PID click-node $NODE_ID --button middle --mode robot
+$CLI $PID right-click-node $NODE_ID
+$CLI $PID double-click-node $NODE_ID --mode robot
 ```
+
+- `--button`: `primary` (default), `secondary` (right), or `middle`.
+- `--clickCount`: integer `1` (default) or `2` (double click).
+- `right-click-node` presets `--button secondary`; `double-click-node` presets `--clickCount 2`.
+  Both accept the same options as `click-node`; explicit options override the presets.
+- Synthetic double clicks send two complete gestures with counts 1 and 2.
+- Synthetic secondary clicks also send `CONTEXT_MENU_REQUESTED`, opening standard context menus.
+  Custom context-menu handlers should consume that request when replacing the default menu.
+- The application must be running and the node and its ancestors must be visible.
+- Disabled and zero-size nodes are rejected, including disabled menu items and their children.
+- `--mode robot` requests window focus and moves the system pointer to the node center. Double-click
+  recognition depends on the OS timing and position thresholds and prior native clicks.
+- A menu or an application event handler may change focus even with synthetic input.
+- Inspect menu item state using `node-details`: `node.disabled: true` means disabled; omitted means
+  false. A standard menu item's rendered Node `disable` property may differ from the MenuItem state.
 
 **Output:**
 ```json
-{ "success": true, "clicked": true, "mode": "synthetic" }
+{ "clicked": true, "mode": "synthetic", "button": "primary", "clickCount": 1 }
 ```
 
-- The application must be running and the node and its ancestors must be visible.
-- Disabled and zero-size nodes are rejected.
-- `--mode synthetic` is the default and sends the complete gesture without pointer or focus changes.
-- `--mode robot` requests window focus and moves the system pointer to the node center.
-- Robot fallback returns `mode: "synthetic"` plus `fallbackReason`.
+Robot fallback returns `mode: "synthetic"` plus `fallbackReason`, preserving the button and click count.
 
 ---
 
@@ -303,7 +318,7 @@ $CLI $PID select-node 0
 
 - Always verify changes with a screenshot or `node-details` query.
 - `select-node` before and after changes provides a quick visual confirmation.
-- `click-node` uses synthetic input by default without moving the system pointer or changing focus.
+- `click-node` uses synthetic input by default without moving the system pointer or requesting focus.
 - Use `click-node --mode robot` only when native pointer behavior is part of the verification.
 - Use `activate-node` when only a `ButtonBase` action needs verification.
 - For text input fields, prefer `set-property text "..."` for reliability over `type-key` character-by-character.

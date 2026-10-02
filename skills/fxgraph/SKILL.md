@@ -130,7 +130,11 @@ If direct lookup is insufficient:
 
 Use `select-node` before a risky change when visual confirmation helps. Prefer `set-property` for
 deterministic text entry. `click-node` sends a complete synthetic gesture by default without moving
-the pointer or changing window focus; use `--mode robot` only when native pointer input is material.
+the pointer or requesting window focus; use `--mode robot` only when native pointer input is material.
+Use `--button secondary` for a right click and `--clickCount 2` for a double click. The shortcuts
+`right-click-node` and `double-click-node` accept `--mode robot` too. Context menus may take focus.
+For menu items, inspect `node.disabled` in `node-details`; omitted means false, while the rendered
+Node's `disable` property alone may not reflect the MenuItem state.
 Use `activate-node` for a deterministic `ButtonBase.fire()` action without mouse input. `type-key`
 remains synthetic.
 
@@ -152,6 +156,7 @@ remains synthetic.
 - Read [inspect-commands.md](references/inspect-commands.md) for exhaustive options and schemas for
   `discover`, `stages`, `find-nodes`, `scenegraph`, and `node-details`.
 - Read [interact-commands.md](references/interact-commands.md) for `set-property`, `select-node`,
-  `click-node`, `activate-node`, `focus`, `type-key`, `screenshot`, and `capture-video`.
+  `click-node`, `right-click-node`, `double-click-node`, `activate-node`, `focus`, `type-key`,
+  `screenshot`, and `capture-video`.
 - Read [troubleshooting.md](references/troubleshooting.md) for decision trees covering empty
   discovery, attach failures, stale IDs, popup controls, and composite screenshots.

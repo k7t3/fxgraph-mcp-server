@@ -414,7 +414,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 指定したノードの中央へクリックジェスチャーを送ります。
 
-**説明**: 既定では `MOUSE_PRESSED`、`MOUSE_RELEASED`、`MOUSE_CLICKED` の完全な合成ジェスチャーを送り、システムポインターとウィンドウフォーカスを変更しません。`mode=robot` を明示すると JavaFX `Robot` がウィンドウへフォーカスを要求し、マウスをノード中央へ移動してプライマリボタンの press/release を送ります。明示した `Robot` が利用できない場合は合成ジェスチャーへ自動的にフォールバックします。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。
+**説明**: 既定では `MOUSE_PRESSED`、`MOUSE_RELEASED`、`MOUSE_CLICKED` の完全な合成ジェスチャーを送り、システムポインターを移動せず、ウィンドウへのフォーカスも要求しません。`mode=robot` を明示すると JavaFX `Robot` がウィンドウへフォーカスを要求し、マウスをノード中央へ移動して指定したボタンで1回または2回クリックします。明示した `Robot` が利用できない場合は合成ジェスチャーへ自動的にフォールバックします。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -422,17 +422,25 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 | pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID |
 | mode | string | いいえ | `synthetic`（既定）または `robot` |
+| button | string | いいえ | `primary`（既定）、`secondary`（右）、`middle` |
+| clickCount | integer | いいえ | `1`（既定）または `2`（ダブルクリック） |
 
 **出力例**:
 ```json
 {
   "success": true,
   "clicked": true,
-  "mode": "synthetic"
+  "mode": "synthetic",
+  "button": "primary",
+  "clickCount": 1
 }
 ```
 
-明示した `Robot` から合成ジェスチャーへフォールバックした場合は、`mode` が `synthetic` となり、`fallbackReason` が追加されます。
+合成ダブルクリックは回数1、2の完全なジェスチャーを順に送ります。右クリックは `CONTEXT_MENU_REQUESTED` も送り、標準コンテキストメニューを開きます。メニューやアプリのハンドラによってフォーカスが変わる場合があります。独自メニューを開く場合は context-menu request を consume して既定メニューの表示を抑制してください。
+
+Robot のダブルクリック認識は OS の時間・位置条件と直前のクリックに依存します。Robot から合成入力へフォールバックした場合は、`mode` が `synthetic` となり、`fallbackReason` が追加されます。ボタン・クリック回数は維持されます。
+
+メニュー項目の有効・無効は `getNodeDetails` の `node.disabled` で確認できます。無効時だけ `true` を出力し、省略時は `false` です。標準メニュー項目の状態は描画ノードの `disable` プロパティだけでは判断できないため、MenuItem の無効状態も反映します。
 
 ---
 

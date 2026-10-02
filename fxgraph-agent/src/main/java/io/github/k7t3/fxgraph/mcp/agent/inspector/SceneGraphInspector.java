@@ -13,9 +13,11 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.ButtonBase;
+import javafx.scene.control.MenuItem;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.image.WritablePixelFormat;
+import javafx.scene.input.ContextMenuEvent;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
@@ -66,10 +68,12 @@ public class SceneGraphInspector {
     private final RobotClicker robotClicker;
 
     public SceneGraphInspector() {
-        this(point -> {
+        this((point, button, clickCount) -> {
             var robot = new Robot();
             robot.mouseMove(point);
-            robot.mouseClick(MouseButton.PRIMARY);
+            for (var count = 0; count < clickCount; count++) {
+                robot.mouseClick(button);
+            }
         });
     }
 
@@ -467,11 +471,17 @@ public class SceneGraphInspector {
      * Clicks a node through JavaFX Robot or a complete synthetic mouse gesture.
      *
      * <p>The optional {@code mode} parameter accepts {@code synthetic} or {@code robot} and
-     * defaults to {@code synthetic} so the system pointer and window focus remain unchanged.
+     * defaults to {@code synthetic}, which does not move the system pointer or request window focus.
      * Explicit Robot failures automatically fall back to synthetic input, with the effective mode
      * and failure reason included in the successful response.
      *
-     * @param params command parameters containing {@code nodeId} and an optional click {@code mode}
+     * <p>{@code button} accepts {@code primary} (default), {@code secondary}, or {@code middle}.
+     * {@code clickCount} accepts 1 (default) or 2. Synthetic double clicks send two complete gestures
+     * with increasing counts. Secondary synthetic clicks also request a context menu.
+     * Robot click counts depend on native multi-click recognition.
+     *
+     * @param params command parameters with {@code nodeId}, optional {@code mode}, {@code button},
+     *               and integer {@code clickCount}
      * @return success with the effective click mode, or an error response when validation fails
      */
     public AgentResponse clickNode(Map<String, Object> params) {
@@ -481,8 +491,9 @@ public class SceneGraphInspector {
             }
             var nodeId = ((Number) params.get("nodeId")).intValue();
             var mode = ClickMode.from(params.get("mode"));
+            var options = ClickOptions.from(params);
 
-            var outcome = runOnFxThread(() -> doClickNode(nodeId, mode));
+            var outcome = runOnFxThread(() -> doClickNode(nodeId, mode, options));
             if (outcome.error() != null) {
                 return AgentResponse.error(outcome.error());
             }
@@ -494,6 +505,8 @@ public class SceneGraphInspector {
             var data = new LinkedHashMap<String, Object>();
             data.put("clicked", true);
             data.put("mode", outcome.mode().value());
+            data.put("button", options.button().name().toLowerCase(Locale.ROOT));
+            data.put("clickCount", options.clickCount());
             if (outcome.fallbackReason() != null) {
                 data.put("fallbackReason", outcome.fallbackReason());
             }
@@ -683,13 +696,13 @@ public class SceneGraphInspector {
         return ((Number) params.get(key)).intValue();
     }
 
-    private ClickOutcome doClickNode(int nodeId, ClickMode mode) {
+    private ClickOutcome doClickNode(int nodeId, ClickMode mode, ClickOptions options) {
         var node = findNodeById(nodeId);
         if (node == null) return ClickOutcome.failure("Node not found: " + nodeId);
         if (!isEffectivelyVisible(node)) {
             return ClickOutcome.failure("Node is not visible: " + nodeId);
         }
-        if (node.isDisabled()) return ClickOutcome.failure("Node is disabled: " + nodeId);
+        if (isInteractionDisabled(node)) return ClickOutcome.failure("Node is disabled: " + nodeId);
 
         var bounds = node.getBoundsInLocal();
         if (hasZeroSize(node, bounds)) {
@@ -704,7 +717,7 @@ public class SceneGraphInspector {
         }
 
         if (mode == ClickMode.SYNTHETIC) {
-            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY());
+            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY(), options);
             return ClickOutcome.success(mode);
         }
 
@@ -714,10 +727,10 @@ public class SceneGraphInspector {
         }
 
         try {
-            robotClicker.click(screenCoordinates);
+            robotClicker.click(screenCoordinates, options.button(), options.clickCount());
             return ClickOutcome.success(mode);
         } catch (RuntimeException exception) {
-            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY());
+            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY(), options);
             var reason = exception.getMessage() != null
                     ? exception.getMessage()
                     : exception.getClass().getSimpleName();
@@ -748,16 +761,27 @@ public class SceneGraphInspector {
             double localX,
             double localY,
             double screenX,
-            double screenY) {
+            double screenY,
+            ClickOptions options) {
         var sceneCoordinates = node.localToScene(localX, localY);
 
         // Control skins may implement activation on press or release rather than MOUSE_CLICKED.
-        node.fireEvent(createSyntheticMouseEvent(
-                node, MouseEvent.MOUSE_PRESSED, sceneCoordinates, screenX, screenY, true));
-        node.fireEvent(createSyntheticMouseEvent(
-                node, MouseEvent.MOUSE_RELEASED, sceneCoordinates, screenX, screenY, false));
-        node.fireEvent(createSyntheticMouseEvent(
-                node, MouseEvent.MOUSE_CLICKED, sceneCoordinates, screenX, screenY, false));
+        for (var count = 1; count <= options.clickCount(); count++) {
+            node.fireEvent(createSyntheticMouseEvent(
+                    node, MouseEvent.MOUSE_PRESSED, sceneCoordinates, screenX, screenY, options.button(), count));
+            var release = createSyntheticMouseEvent(
+                    node, MouseEvent.MOUSE_RELEASED, sceneCoordinates, screenX, screenY, options.button(), count);
+            node.fireEvent(release);
+            node.fireEvent(createSyntheticMouseEvent(
+                    node, MouseEvent.MOUSE_CLICKED, sceneCoordinates, screenX, screenY, options.button(), count));
+            // Firing MouseEvent directly does not run the native context-menu event generator.
+            if (options.button() == MouseButton.SECONDARY) {
+                node.fireEvent(new ContextMenuEvent(
+                        ContextMenuEvent.CONTEXT_MENU_REQUESTED,
+                        sceneCoordinates.getX(), sceneCoordinates.getY(), screenX, screenY, false,
+                        new PickResult(node, sceneCoordinates.getX(), sceneCoordinates.getY())));
+            }
+        }
     }
 
     private MouseEvent createSyntheticMouseEvent(
@@ -766,18 +790,46 @@ public class SceneGraphInspector {
             Point2D sceneCoordinates,
             double screenX,
             double screenY,
-            boolean primaryButtonDown) {
+            MouseButton button,
+            int clickCount) {
+        var pressed = eventType == MouseEvent.MOUSE_PRESSED;
         return new MouseEvent(
                 eventType,
                 sceneCoordinates.getX(), sceneCoordinates.getY(),
                 screenX, screenY,
-                MouseButton.PRIMARY,
-                1,
+                button,
+                clickCount,
                 false, false, false, false,
-                primaryButtonDown, false, false,
-                true, false, true,
+                pressed && button == MouseButton.PRIMARY,
+                pressed && button == MouseButton.MIDDLE,
+                pressed && button == MouseButton.SECONDARY,
+                true, button == MouseButton.SECONDARY && eventType == MouseEvent.MOUSE_RELEASED, true,
                 new PickResult(node, sceneCoordinates.getX(), sceneCoordinates.getY())
         );
+    }
+
+    private record ClickOptions(MouseButton button, int clickCount) {
+        private static ClickOptions from(Map<String, Object> params) {
+            var buttonValue = params.get("button");
+            var button = buttonValue == null ? MouseButton.PRIMARY
+                    : switch (String.valueOf(buttonValue).toLowerCase(Locale.ROOT)) {
+                        case "primary" -> MouseButton.PRIMARY;
+                        case "secondary" -> MouseButton.SECONDARY;
+                        case "middle" -> MouseButton.MIDDLE;
+                        default -> throw new IllegalArgumentException(
+                                "Unsupported button: " + buttonValue + ". Expected primary, secondary or middle");
+                    };
+            var countValue = params.get("clickCount");
+            if (countValue == null) {
+                return new ClickOptions(button, 1);
+            }
+            if (!(countValue instanceof Number number)
+                    || number.doubleValue() != number.intValue()
+                    || number.intValue() < 1 || number.intValue() > 2) {
+                throw new IllegalArgumentException("clickCount must be an integer of 1 or 2");
+            }
+            return new ClickOptions(button, number.intValue());
+        }
     }
 
     private enum ClickMode {
@@ -823,7 +875,20 @@ public class SceneGraphInspector {
 
     @FunctionalInterface
     interface RobotClicker {
-        void click(Point2D point);
+        void click(Point2D point, MouseButton button, int clickCount);
+    }
+
+    private boolean isInteractionDisabled(Node node) {
+        if (node.isDisabled()) return true;
+        for (var current = node; current != null; current = current.getParent()) {
+            // Standard menu skins use CSS state instead of binding Node.disableProperty().
+            if (current.hasProperties()
+                    && current.getProperties().get(MenuItem.class) instanceof MenuItem item
+                    && item.isDisable()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean hasZeroSize(Node node, Bounds bounds) {
@@ -1180,6 +1245,10 @@ public class SceneGraphInspector {
         }
 
         result.put("type", nodeClassName(node));
+
+        if (isInteractionDisabled(node)) {
+            result.put("disabled", true);
+        }
 
         // visible: only emit when false (default is true)
         if (!node.isVisible()) {

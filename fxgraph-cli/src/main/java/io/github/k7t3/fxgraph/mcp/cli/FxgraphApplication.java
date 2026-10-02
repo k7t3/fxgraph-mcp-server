@@ -11,7 +11,9 @@ package io.github.k7t3.fxgraph.mcp.cli;
  *   fxgraph &lt;pid&gt; node-details &lt;nodeId&gt; [--filter p1,p2]
  *   fxgraph &lt;pid&gt; set-property &lt;nodeId&gt; &lt;property&gt; &lt;value&gt; [--type TYPE]
  *   fxgraph &lt;pid&gt; select-node &lt;nodeId&gt; [--no-bounds]
- *   fxgraph &lt;pid&gt; click-node &lt;nodeId&gt; [--mode synthetic|robot]
+ *   fxgraph &lt;pid&gt; click-node &lt;nodeId&gt; [--mode synthetic|robot] [--button primary|secondary|middle] [--clickCount 1|2]
+ *   fxgraph &lt;pid&gt; right-click-node &lt;nodeId&gt; [--mode synthetic|robot]
+ *   fxgraph &lt;pid&gt; double-click-node &lt;nodeId&gt; [--mode synthetic|robot]
  *   fxgraph &lt;pid&gt; activate-node &lt;nodeId&gt;
  *   fxgraph &lt;pid&gt; focus &lt;nodeId&gt;
  *   fxgraph &lt;pid&gt; type-key &lt;key&gt; [--nodeId N]
@@ -61,7 +63,9 @@ public class FxgraphApplication {
         System.err.println("  fxgraph <pid> select-node <nodeId> [--no-bounds]");
         System.err.println("      Highlight a node with a red border overlay.");
         System.err.println();
-        System.err.println("  fxgraph <pid> click-node <nodeId> [--mode synthetic|robot]");
+        System.err.println("  fxgraph <pid> click-node <nodeId> [--mode synthetic|robot] [--button primary|secondary|middle] [--clickCount 1|2]");
+        System.err.println("  fxgraph <pid> right-click-node <nodeId> [--mode synthetic|robot]");
+        System.err.println("  fxgraph <pid> double-click-node <nodeId> [--mode synthetic|robot]");
         System.err.println("      Click with a synthetic gesture by default; use Robot explicitly for native input.");
         System.err.println();
         System.err.println("  fxgraph <pid> activate-node <nodeId>");
