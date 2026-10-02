@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration tests for the MCP server over STDIO transport.
@@ -213,6 +214,16 @@ class McpServerStdioIntegrationTest {
             assertFalse(schema.properties().containsKey("sessionId"),
                     () -> tool.name() + " must not expose sessionId: " + schema);
         }
+    }
+
+    @Test
+    void clickNodeExposesOptionalButtonAndClickCount() {
+        client.initialize();
+        var tool = client.listTools().tools().stream()
+                .filter(candidate -> "clickNode".equals(candidate.name())).findFirst().orElseThrow();
+
+        assertThat(tool.inputSchema().properties()).containsKeys("button", "clickCount");
+        assertThat(tool.inputSchema().required()).doesNotContain("button", "clickCount");
     }
 
     // ===== Tool Invocation =====

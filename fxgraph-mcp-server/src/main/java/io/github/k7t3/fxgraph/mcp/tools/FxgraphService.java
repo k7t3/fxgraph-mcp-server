@@ -209,21 +209,53 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.SELECT_NODE, params));
     }
 
-    @Tool(description = "Click a JavaFX node by nodeId. Uses a synthetic press/release/click gesture by default without moving the system pointer or changing window focus. Robot input is available explicitly.")
+    /**
+     * Sends one or two clicks with the selected button to a node in the target JVM.
+     *
+     * @param pid process ID of the target JavaFX application
+     * @param nodeId node ID in the current target JVM session
+     * @param mode synthetic (default) or robot; null selects the default
+     * @param button primary (default), secondary or middle; null selects the default
+     * @param clickCount 1 (default) or 2; null selects the default
+     * @return agent response with the effective mode, button, click count and any fallback reason
+     */
+    @Tool(description = "Click a JavaFX node by nodeId with primary, secondary (right), or middle button and one or two clicks. Uses synthetic gestures by default without moving the system pointer or requesting focus. Secondary clicks request a context menu. Robot input is available explicitly; native multi-click recognition depends on the OS.")
     public Map<String, Object> clickNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID") int nodeId,
             @ToolParam(description = "Click mode: synthetic (default) or robot", required = false)
-                    String mode) {
+                    String mode,
+            @ToolParam(description = "Mouse button: primary (default), secondary (right), or middle", required = false)
+                    String button,
+            @ToolParam(description = "Number of clicks: 1 (default) or 2 for a double click", required = false)
+                    Integer clickCount) {
 
         var params = new LinkedHashMap<String, Object>();
         params.put("nodeId", nodeId);
         if (mode != null) {
             params.put("mode", mode);
         }
+        if (button != null) {
+            params.put("button", button);
+        }
+        if (clickCount != null) {
+            params.put("clickCount", clickCount);
+        }
 
         return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.CLICK_NODE, params));
+    }
+
+    /**
+     * Sends a single primary click using the selected mode.
+     *
+     * @param pid target process ID
+     * @param nodeId node ID in the current target JVM session
+     * @param mode synthetic (default) or robot; null selects the default
+     * @return agent response describing the delivered click
+     */
+    public Map<String, Object> clickNode(int pid, int nodeId, String mode) {
+        return clickNode(pid, nodeId, mode, null, null);
     }
 
     /**

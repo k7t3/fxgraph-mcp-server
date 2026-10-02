@@ -330,6 +330,26 @@ class FxgraphServiceTest {
     }
 
     @Test
+    void clickNodeSendsButtonAndClickCount() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.clickNode(PID, 42, "robot", "secondary", 2);
+
+        assertThat(capturedCommand().getParams()).containsEntry("nodeId", 42)
+                .containsEntry("mode", "robot").containsEntry("button", "secondary")
+                .containsEntry("clickCount", 2);
+    }
+
+    @Test
+    void clickNodeOmitsAbsentOptionalParameters() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.clickNode(PID, 42, null, null, null);
+
+        assertThat(capturedCommand().getParams()).containsExactlyEntriesOf(Map.of("nodeId", 42));
+    }
+
+    @Test
     void activateNodeSendsNodeId() throws Exception {
         stubSuccessfulMapResponse();
 

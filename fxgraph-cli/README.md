@@ -50,7 +50,9 @@ java -jar fxgraph-cli.jar <pid> <command> [params-json]
 | `find-nodes` | タイプ・ID・テキスト・スタイルクラスからノードを検索 | `--type`, `--id`, `--text`, `--styleClass`, `--stageId` |
 | `set-property` | ノードのプロパティを変更 | `<nodeId> <property> <value>`, `--type` |
 | `select-node` | ノードをハイライト表示 | `<nodeId>`, `--no-bounds` |
-| `click-node` | 既定の完全な合成ジェスチャーまたは明示した JavaFX Robot でノードをクリック | `<nodeId>`, `--mode synthetic|robot` |
+| `click-node` | ボタン・クリック回数を指定してクリック | `<nodeId>`, `--mode synthetic|robot`, `--button primary|secondary|middle`, `--clickCount 1|2` |
+| `right-click-node` | `click-node --button secondary` のショートカット | `<nodeId>`, `--mode` |
+| `double-click-node` | `click-node --clickCount 2` のショートカット | `<nodeId>`, `--mode`, `--button` |
 | `activate-node` | マウス入力なしに `ButtonBase` を起動 | `<nodeId>` |
 | `focus` | ノードにフォーカスを当てる | `<nodeId>` |
 | `type-key` | キー入力を送信 | `<key>`, `--nodeId` |
@@ -88,6 +90,10 @@ java -jar fxgraph-cli.jar $PID select-node $NODE_ID
 # クリック・論理起動・フォーカス・キー入力
 java -jar fxgraph-cli.jar $PID click-node $NODE_ID
 java -jar fxgraph-cli.jar $PID click-node $NODE_ID --mode robot
+java -jar fxgraph-cli.jar $PID click-node $NODE_ID --button secondary
+java -jar fxgraph-cli.jar $PID click-node $NODE_ID --clickCount 2
+java -jar fxgraph-cli.jar $PID right-click-node $NODE_ID
+java -jar fxgraph-cli.jar $PID double-click-node $NODE_ID --mode robot
 java -jar fxgraph-cli.jar $PID activate-node $BUTTON_NODE_ID
 java -jar fxgraph-cli.jar $PID focus $NODE_ID
 java -jar fxgraph-cli.jar $PID type-key ENTER

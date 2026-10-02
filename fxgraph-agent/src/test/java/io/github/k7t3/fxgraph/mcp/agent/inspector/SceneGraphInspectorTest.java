@@ -529,7 +529,7 @@ class SceneGraphInspectorTest {
     @DisplayName("Should default to a synthetic gesture without using Robot")
     void shouldDefaultToSyntheticGestureWithoutUsingRobot() {
         var robotClicks = new AtomicInteger();
-        var inspector = new SceneGraphInspector(point -> robotClicks.incrementAndGet());
+        var inspector = new SceneGraphInspector((point, button, count) -> robotClicks.incrementAndGet());
         var rectangle = new Rectangle(20, 20);
         var mouseClicks = new AtomicInteger();
         rectangle.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> mouseClicks.incrementAndGet());
@@ -604,7 +604,7 @@ class SceneGraphInspectorTest {
     @Test
     @DisplayName("Should fall back to a synthetic gesture when Robot is unavailable")
     void shouldFallBackToSyntheticGestureWhenRobotIsUnavailable() {
-        var inspector = new SceneGraphInspector(point -> {
+        var inspector = new SceneGraphInspector((point, button, count) -> {
             throw new UnsupportedOperationException("Robot is unavailable");
         });
         var rectangle = new Rectangle(20, 20);

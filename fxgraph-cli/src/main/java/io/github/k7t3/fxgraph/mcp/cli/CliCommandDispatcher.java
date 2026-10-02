@@ -56,7 +56,8 @@ public class CliCommandDispatcher {
             return CliJsonOutput.failure(
                     "No command specified after PID " + pid
                     + ". Available commands: stages, scenegraph, node-details, find-nodes, set-property,"
-                    + " select-node, click-node, activate-node, focus, type-key, screenshot, capture-video");
+                    + " select-node, click-node, right-click-node, double-click-node, activate-node,"
+                    + " focus, type-key, screenshot, capture-video");
         }
 
         return runWithAgent(pid, Arrays.copyOfRange(args, 1, args.length));
@@ -102,7 +103,7 @@ public class CliCommandDispatcher {
                 case "find-nodes"   -> cmdFindNodes(agent, args);
                 case "set-property" -> cmdSetProperty(agent, args);
                 case "select-node"  -> cmdSelectNode(agent, args);
-                case "click-node"   -> cmdClickNode(agent, args);
+                case "click-node", "right-click-node", "double-click-node" -> cmdClickNode(agent, args);
                 case "activate-node" -> cmdActivateNode(agent, args);
                 case "focus"        -> cmdFocus(agent, args);
                 case "type-key"     -> cmdTypeKey(agent, args);
@@ -236,16 +237,26 @@ public class CliCommandDispatcher {
 
     private static int cmdClickNode(JavaFxAgent agent, String[] args) throws Exception {
         if (args.length < 2) {
-            return CliJsonOutput.failure("click-node requires a <nodeId> argument");
+            return CliJsonOutput.failure(args[0] + " requires a <nodeId> argument");
         }
         var nodeId = parseNodeId(args[1]);
         var params = new LinkedHashMap<String, Object>();
         params.put("nodeId", nodeId);
+        if ("right-click-node".equals(args[0])) params.put("button", "secondary");
+        if ("double-click-node".equals(args[0])) params.put("clickCount", 2);
         for (var i = 2; i < args.length; i++) {
-            if ("--mode".equals(args[i])) {
-                params.put("mode", requireNext(args, ++i, "--mode"));
-            } else {
-                throw new IllegalArgumentException(unknownOptionMessage(args[i]));
+            switch (args[i]) {
+                case "--mode" -> params.put("mode", requireNext(args, ++i, "--mode"));
+                case "--button" -> params.put("button", requireNext(args, ++i, "--button"));
+                case "--clickCount" -> {
+                    var value = requireNext(args, ++i, "--clickCount");
+                    try {
+                        params.put("clickCount", Integer.parseInt(value));
+                    } catch (NumberFormatException exception) {
+                        throw new IllegalArgumentException("--clickCount requires an integer of 1 or 2");
+                    }
+                }
+                default -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         var resp = agent.sendCommand(

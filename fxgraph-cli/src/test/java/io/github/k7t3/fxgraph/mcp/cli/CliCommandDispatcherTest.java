@@ -7,6 +7,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -406,6 +409,50 @@ class CliCommandDispatcherTest {
         assertThat(captureCommand().getParams())
                 .containsEntry("nodeId", 42)
                 .containsEntry("mode", "synthetic");
+    }
+
+    @Test
+    void clickNodeSendsButtonAndClickCount() throws Exception {
+        successResponse();
+        var code = dispatcher.dispatch(new String[]{
+                "12345", "click-node", "42", "--button", "secondary", "--clickCount", "2", "--mode", "robot"
+        });
+
+        assertThat(code).isZero();
+        assertThat(captureCommand().getParams()).containsEntry("button", "secondary")
+                .containsEntry("clickCount", 2).containsEntry("mode", "robot");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"right-click-node, button, secondary", "double-click-node, clickCount, 2"})
+    void clickShortcutSendsPresetWithRequestedMode(String shortcut, String key, String value) throws Exception {
+        successResponse();
+        var code = dispatcher.dispatch(new String[]{"12345", shortcut, "42", "--mode", "robot"});
+
+        assertThat(code).isZero();
+        var command = captureCommand();
+        assertThat(command.getCommand()).isEqualTo(AgentCommand.CommandType.CLICK_NODE);
+        assertThat(command.getParams()).containsEntry("nodeId", 42).containsEntry("mode", "robot");
+        assertThat(command.getParams().get(key).toString()).isEqualTo(value);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"--button", "--clickCount"})
+    void clickOptionRequiresValue(String option) throws Exception {
+        var code = dispatcher.dispatch(new String[]{"12345", "click-node", "42", option});
+
+        assertThat(code).isEqualTo(1);
+        assertThat(errContent.toString()).contains(option, "requires");
+        verify(mockAgent, never()).sendCommand(any());
+    }
+
+    @Test
+    void clickCountRequiresInteger() throws Exception {
+        var code = dispatcher.dispatch(new String[]{"12345", "click-node", "42", "--clickCount", "1.5"});
+
+        assertThat(code).isEqualTo(1);
+        assertThat(errContent.toString()).contains("clickCount", "integer");
+        verify(mockAgent, never()).sendCommand(any());
     }
 
     @Test
