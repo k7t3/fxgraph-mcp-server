@@ -299,18 +299,44 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.REQUEST_FOCUS, params));
     }
 
-    @Tool(description = "Type a key into a JavaFX node using JavaFX Event System. If nodeId is omitted, the currently focused node is used.")
+    /**
+     * Submits a key gesture, with optional modifiers and native Robot input.
+     *
+     * @param pid target JVM process ID
+     * @param key key code name or single character (exact characters are supported in synthetic mode)
+     * @param nodeId target node, or null for the focused scene
+     * @param modifiers modifier names, or null for none
+     * @param mode synthetic (default) or robot; Robot failure is returned without fallback
+     * @return agent input submission result, not a guarantee that a shortcut completed
+     */
+    @Tool(description = "Send a key gesture to a JavaFX node or the focused scene. Supports SHIFT, CTRL/CONTROL, ALT, CMD/META modifiers. Synthetic mode (default) dispatches JavaFX events; robot mode requests keyboard focus and sends native input without fallback. Robot requires OS permissions. Shortcut execution is application-dependent; termination may close the connection before a response.")
     public Map<String, Object> typeKey(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Key text or key code name (e.g. 'a', 'ENTER')") String key,
-            @ToolParam(description = "Target node ID (optional, defaults to focused node)", required = false) Integer nodeId) {
+            @ToolParam(description = "Target node ID (optional, defaults to focused scene)", required = false) Integer nodeId,
+            @ToolParam(description = "Modifier names: SHIFT, CTRL/CONTROL, ALT, CMD/META (e.g. ['META', 'SHIFT'])", required = false) List<String> modifiers,
+            @ToolParam(description = "Input mode: synthetic (default) or robot for native input", required = false) String mode) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("key", key);
         if (nodeId != null) params.put("nodeId", nodeId);
+        if (modifiers != null) params.put("modifiers", modifiers);
+        if (mode != null) params.put("mode", mode);
 
         return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.TYPE_KEY, params));
+    }
+
+    /**
+     * Sends a synthetic key gesture without modifiers.
+     *
+     * @param pid target JVM process ID
+     * @param key key code name or single character
+     * @param nodeId target node, or null for the focused scene
+     * @return agent input submission result
+     */
+    public Map<String, Object> typeKey(int pid, String key, Integer nodeId) {
+        return typeKey(pid, key, nodeId, null, null);
     }
 
     @Tool(description = "Take a screenshot of a specific node or one JavaFX window scene, including an individually selected popup scene. Saves PNG to the specified path.")

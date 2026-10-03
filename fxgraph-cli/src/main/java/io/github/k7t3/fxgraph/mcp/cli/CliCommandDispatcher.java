@@ -293,10 +293,11 @@ public class CliCommandDispatcher {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("key", key);
         for (int i = 2; i < args.length; i++) {
-            if ("--nodeId".equals(args[i])) {
-                params.put("nodeId", Integer.parseInt(requireNext(args, ++i, "--nodeId")));
-            } else {
-                throw new IllegalArgumentException(unknownOptionMessage(args[i]));
+            switch (args[i]) {
+                case "--nodeId" -> params.put("nodeId", Integer.parseInt(requireNext(args, ++i, "--nodeId")));
+                case "--modifiers" -> params.put("modifiers", Arrays.asList(requireNext(args, ++i, "--modifiers").split(",", -1)));
+                case "--mode" -> params.put("mode", requireNext(args, ++i, "--mode"));
+                default -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
         AgentResponse resp = agent.sendCommand(

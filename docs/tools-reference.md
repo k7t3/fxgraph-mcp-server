@@ -490,24 +490,36 @@ Robot のダブルクリック認識は OS の時間・位置条件と直前の�
 
 ### 13. typeKey
 
-キー入力イベントを送信します。
+修飾キー付きのキー入力を送信します。既定は合成入力で、Robot による実キー送出も選択できます。
 
-**説明**: Type a key into a JavaFX node using JavaFX Event System. If nodeId is omitted, the currently focused node is used.
+合成入力はキーの押下・解放と、文字入力時の `KEY_TYPED` を送信します。Control・Alt・Meta を含む
+ショートカットでは文字を挿入しません。Robot 入力は対象ウィンドウとノードにフォーカスを要求し、
+実キーを送出します。利用できない場合は合成入力へ切り替えず、エラーを返します。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | pid | integer | はい | Process ID of the target JavaFX application |
 | key | string | はい | Key text or key code name (e.g. 'a', 'ENTER') |
-| nodeId | integer | いいえ | Target node ID (optional, defaults to focused node) |
+| nodeId | integer | いいえ | 対象ノード。省略時はフォーカスのあるシーン |
+| modifiers | string[] | いいえ | `SHIFT`、`CTRL`/`CONTROL`、`ALT`、`CMD`/`META`。複数指定可、大文字小文字不問 |
+| mode | string | いいえ | `synthetic`（既定）または `robot` |
 
 **出力例**:
 ```json
 {
   "success": true,
-  "typed": true
+  "typed": true,
+  "mode": "synthetic"
 }
 ```
+
+Robot 入力には OS の操作権限（macOS ではアクセシビリティ）が必要です。文字はキーボード配列に
+依存するため、大文字入力には `SHIFT` を明示してください。成功応答は入力の送出を示し、
+ショートカットの実行結果は対象アプリで確認してください。Cmd+Q などで JVM が終了すると、
+応答前に接続が閉じる場合があります。
+macOS ではアクセシビリティ権限がないと、Robot が例外を返さず入力を無視することもあります。
+フォーカスを取得できない場合は、対象アプリを前面にしてから再試行してください。
 
 ---
 

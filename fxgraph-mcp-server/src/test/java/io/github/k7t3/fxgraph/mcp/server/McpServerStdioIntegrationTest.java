@@ -226,6 +226,16 @@ class McpServerStdioIntegrationTest {
         assertThat(tool.inputSchema().required()).doesNotContain("button", "clickCount");
     }
 
+    @Test
+    void typeKeyExposesOptionalModifiersAndMode() {
+        client.initialize();
+        var tool = client.listTools().tools().stream()
+                .filter(candidate -> "typeKey".equals(candidate.name())).findFirst().orElseThrow();
+
+        assertThat(tool.inputSchema().properties()).containsKeys("modifiers", "mode");
+        assertThat(tool.inputSchema().required()).doesNotContain("modifiers", "mode");
+    }
+
     // ===== Tool Invocation =====
 
     @Test

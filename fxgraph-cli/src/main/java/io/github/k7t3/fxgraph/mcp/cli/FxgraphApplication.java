@@ -16,7 +16,7 @@ package io.github.k7t3.fxgraph.mcp.cli;
  *   fxgraph &lt;pid&gt; double-click-node &lt;nodeId&gt; [--mode synthetic|robot]
  *   fxgraph &lt;pid&gt; activate-node &lt;nodeId&gt;
  *   fxgraph &lt;pid&gt; focus &lt;nodeId&gt;
- *   fxgraph &lt;pid&gt; type-key &lt;key&gt; [--nodeId N]
+ *   fxgraph &lt;pid&gt; type-key &lt;key&gt; [--nodeId N] [--modifiers META,SHIFT] [--mode synthetic|robot]
  *   fxgraph &lt;pid&gt; screenshot &lt;outputPath&gt; [--nodeId N] [--stageId S]
  *   fxgraph &lt;pid&gt; capture-video &lt;outputPath&gt; [--nodeId N] [--stageId S] [--durationSeconds N]
  * </pre>
@@ -74,8 +74,9 @@ public class FxgraphApplication {
         System.err.println("  fxgraph <pid> focus <nodeId>");
         System.err.println("      Request keyboard focus for a node.");
         System.err.println();
-        System.err.println("  fxgraph <pid> type-key <key> [--nodeId N]");
-        System.err.println("      Type a key (e.g. 'a', 'ENTER') into a node or the focused node.");
+        System.err.println("  fxgraph <pid> type-key <key> [--nodeId N] [--modifiers META,SHIFT] [--mode synthetic|robot]");
+        System.err.println("      Send a key gesture into a node or the focused scene (default: synthetic).");
+        System.err.println("      Modifiers: SHIFT, CTRL/CONTROL, ALT, CMD/META. Robot requires OS permissions.");
         System.err.println();
         System.err.println("  fxgraph <pid> screenshot <outputPath> [--nodeId N] [--stageId S] [--maxWidth W] [--maxHeight H]");
         System.err.println("      Save a PNG screenshot of a node or one window scene. Default max size: 1280x720.");

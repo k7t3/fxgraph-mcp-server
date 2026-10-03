@@ -136,12 +136,17 @@ Call this before `type-key` when targeting a specific input field.
 
 ## type-key
 
-Send a synthetic JavaFX key event to the focused node (or a specific node).
+Send a key gesture to the focused scene (or a specific node). Synthetic mode is the default.
+It dispatches `KEY_PRESSED` and `KEY_RELEASED`, plus `KEY_TYPED` for printable input without
+Control, Alt, or Meta. Named keys such as `ENTER` and `TAB` are sent as key codes.
 
 ```bash
 $CLI $PID type-key ENTER
 $CLI $PID type-key a
 $CLI $PID type-key TAB --nodeId $NODE_ID
+$CLI $PID type-key TAB --modifiers SHIFT
+$CLI $PID type-key Q --modifiers META,SHIFT
+$CLI $PID type-key W --modifiers CMD --mode robot
 ```
 
 | Argument | Format |
@@ -150,16 +155,29 @@ $CLI $PID type-key TAB --nodeId $NODE_ID
 | Single character | `a`, `1`, `@`, etc. |
 
 `--nodeId` — optional; send to a specific node instead of the focused node.
+`--modifiers` — comma-separated `SHIFT`, `CTRL`/`CONTROL`, `ALT`, `CMD`/`META`, case-insensitive.
+Multiple names and aliases can be combined; duplicate modifiers are pressed once.
+In macOS Robot mode, `CMD`/`META` sends JavaFX's physical `COMMAND` key.
+`--mode` — `synthetic` (default) or `robot`.
 
 **Output:**
 ```json
-{ "success": true, "typed": true }
+{ "success": true, "typed": true, "mode": "synthetic" }
 ```
 
-This is not native keyboard input. Treat it as best-effort and verify the application effect. For
-text fields, prefer `set-property ... text`; for deterministic button activation, prefer
-`activate-node`. Use `click-node` when pointer behavior is material. Use TestFX or native automation
-when exact key-code or input-method behavior matters.
+Robot mode requests window and node focus, then presses modifiers, presses and releases the key,
+and releases modifiers in reverse order. It requires native keyboard focus and OS permissions
+(Accessibility on macOS). Errors are returned without synthetic fallback. Robot input uses key codes
+and the active keyboard layout; synthetic mode supports exact single characters, including Unicode.
+Use explicit modifiers for Robot letter case (e.g. `a --modifiers SHIFT`); `Q` names the Q key.
+On macOS, denied Accessibility permission can silently discard native input even when Robot reports
+successful submission. Bring the target application to the foreground if window focus cannot be acquired.
+
+Successful output confirms input submission. Verify focus movement, shortcut actions, and window
+lifecycle events in the application. Cmd+W/Cmd+Q depend on application and platform behavior.
+Cmd+Q may terminate the JVM before the agent replies, producing a connection error; that error alone
+does not establish whether the shortcut succeeded. For text fields, prefer `set-property ... text`
+for deterministic replacement; for button activation, prefer `activate-node`.
 
 ---
 

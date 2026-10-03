@@ -395,6 +395,16 @@ class FxgraphServiceTest {
     }
 
     @Test
+    void typeKeySendsModifiersAndMode() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.typeKey(PID, "Q", null, List.of("META", "SHIFT"), "robot");
+
+        assertThat(capturedCommand().getParams()).containsEntry("modifiers", List.of("META", "SHIFT"))
+                .containsEntry("mode", "robot").doesNotContainKey("nodeId");
+    }
+
+    @Test
     void takeScreenshotSendsNodeTargetAndDimensions() throws Exception {
         stubSuccessfulMapResponse();
 

@@ -52,7 +52,7 @@ AI から JavaFX アプリケーションを Scenic View のように検査・�
 | `clickNode` | ボタン・クリック回数を指定してクリック。右クリック・ダブルクリックに対応し、既定は合成入力 |
 | `activateNode` | マウス入力なしに `ButtonBase` を起動する |
 | `requestFocus` | ノードにフォーカスを当てる |
-| `typeKey` | キー入力を送信する |
+| `typeKey` | 修飾キー付きのキー入力を送信する（synthetic / robot） |
 | `takeScreenshot` | スクリーンショットを PNG で保存する |
 | `captureVideo` | 最大30秒の MP4/H.264 動画クリップを保存する |
 

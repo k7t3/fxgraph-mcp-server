@@ -517,6 +517,26 @@ class CliCommandDispatcherTest {
         assertEquals(123, cmd.getParams().get("nodeId"));
     }
 
+    @Test
+    void typeKeySendsModifiersAndMode() throws Exception {
+        successResponse();
+
+        var code = dispatcher.dispatch(new String[]{"12345", "type-key", "Q", "--modifiers", "META,SHIFT", "--mode", "robot"});
+
+        assertThat(code).isZero();
+        assertThat(captureCommand().getParams()).containsEntry("modifiers", List.of("META", "SHIFT"))
+                .containsEntry("mode", "robot");
+    }
+
+    @Test
+    void typeKeyRejectsMissingModifiersValue() throws Exception {
+        var code = dispatcher.dispatch(new String[]{"12345", "type-key", "Q", "--modifiers"});
+
+        assertThat(code).isEqualTo(1);
+        assertThat(errContent.toString()).contains("--modifiers requires a value");
+        verify(mockAgent, never()).sendCommand(any());
+    }
+
     // ===================================================
     // screenshot
     // ===================================================

@@ -18,7 +18,6 @@ import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.image.WritablePixelFormat;
 import javafx.scene.input.ContextMenuEvent;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.PickResult;
@@ -66,6 +65,7 @@ public class SceneGraphInspector {
     private Node currentHighlight;
     private Parent currentHighlightParent;
     private final RobotClicker robotClicker;
+    private final java.util.function.Supplier<KeyInput.Keyboard> keyboardFactory;
 
     public SceneGraphInspector() {
         this((point, button, clickCount) -> {
@@ -78,7 +78,12 @@ public class SceneGraphInspector {
     }
 
     SceneGraphInspector(RobotClicker robotClicker) {
+        this(robotClicker, KeyInput::robotKeyboard);
+    }
+
+    SceneGraphInspector(RobotClicker robotClicker, java.util.function.Supplier<KeyInput.Keyboard> keyboardFactory) {
         this.robotClicker = Objects.requireNonNull(robotClicker);
+        this.keyboardFactory = Objects.requireNonNull(keyboardFactory);
     }
 
     // =============================================
@@ -559,19 +564,51 @@ public class SceneGraphInspector {
         }
     }
 
+    /**
+     * Sends a key gesture to the selected node or focused scene.
+     * Robot input requests native focus and reports failure without synthetic fallback.
+     *
+     * @param params key, optional nodeId, modifier array, and synthetic (default) or robot mode
+     * @return input submission result; successful submission does not guarantee shortcut execution
+     */
     public AgentResponse typeKey(Map<String, Object> params) {
         try {
             if (params == null || params.get("key") == null) {
                 return AgentResponse.error("key is required");
             }
-            String key = String.valueOf(params.get("key"));
+            var stroke = KeyInput.parse(params);
             Integer nodeId = params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
-
-            String error = runOnFxThread(() -> doTypeKey(nodeId, key));
-            if (error != null) {
-                return AgentResponse.error(error);
+            var target = runOnFxThread(() -> nodeId != null ? findNodeById(nodeId) : findFocusedNode());
+            if (target == null) {
+                return AgentResponse.error(nodeId != null ? "Node not found: " + nodeId : "No focused node found");
             }
-            return AgentResponse.success(Map.of("typed", true));
+            var error = runOnFxThread(() -> {
+                if (!isEffectivelyVisible(target)) return "Node is not visible: " + nodeId;
+                if (target.isDisabled()) return "Node is disabled: " + nodeId;
+                if (stroke.mode() == KeyInput.Mode.ROBOT) target.getScene().getWindow().requestFocus();
+                target.requestFocus();
+                return null;
+            });
+            if (error != null) return AgentResponse.error(error);
+            if (stroke.mode() == KeyInput.Mode.ROBOT) {
+                if (!awaitKeyboardFocus(target)) return AgentResponse.error("Target window or node did not acquire keyboard focus");
+                runOnFxThread(() -> {
+                    if (!hasKeyboardFocus(target)) throw new IllegalStateException("Target lost keyboard focus before Robot input");
+                    KeyInput.robot(keyboardFactory.get(), stroke);
+                    return null;
+                });
+            } else {
+                runOnFxThread(() -> {
+                    KeyInput.synthetic(target, stroke);
+                    return null;
+                });
+            }
+            return AgentResponse.success(Map.of("typed", true, "mode", stroke.mode().name().toLowerCase(Locale.ROOT)));
+        } catch (IllegalArgumentException e) {
+            return AgentResponse.error(e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return AgentResponse.error("Key input was interrupted");
         } catch (Exception e) {
             return AgentResponse.error("Failed to type key: " + e.getMessage());
         }
@@ -915,23 +952,20 @@ public class SceneGraphInspector {
         return true;
     }
 
-    private String doTypeKey(Integer nodeId, String key) {
-        if (key == null || key.isEmpty()) return "key is required";
+    private boolean awaitKeyboardFocus(Node target) throws Exception {
+        if (Platform.isFxApplicationThread()) return hasKeyboardFocus(target);
+        var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        do {
+            if (runOnFxThread(() -> hasKeyboardFocus(target))) return true;
+            Thread.sleep(25);
+        } while (System.nanoTime() < deadline);
+        return false;
+    }
 
-        Node target = nodeId != null ? findNodeById(nodeId) : findFocusedNode();
-        if (target == null) return nodeId != null ? "Node not found: " + nodeId : "No focused node found";
-
-        target.requestFocus();
-
-        KeyEvent keyTyped = new KeyEvent(
-            KeyEvent.KEY_TYPED,
-            "",
-            "",
-            null,
-            false, false, false, false
-        );
-        target.fireEvent(keyTyped);
-        return null;
+    private boolean hasKeyboardFocus(Node target) {
+        var scene = target.getScene();
+        return scene != null && scene.getWindow() != null && scene.getWindow().isShowing()
+                && scene.getWindow().isFocused() && scene.getFocusOwner() == target;
     }
 
     private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId, String savePath, int maxWidth, int maxHeight) {
@@ -1198,6 +1232,12 @@ public class SceneGraphInspector {
 
     private Node findFocusedNode() {
         ObservableList<Window> windows = Window.getWindows();
+        for (var window : windows) {
+            if (window.isFocused() && window.getScene() != null) {
+                var scene = window.getScene();
+                return scene.getFocusOwner() != null ? scene.getFocusOwner() : scene.getRoot();
+            }
+        }
         for (Window window : windows) {
             if (window.getScene() == null) continue;
             Node focusOwner = window.getScene().getFocusOwner();

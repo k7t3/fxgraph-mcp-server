@@ -127,7 +127,7 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `clickNode` | ボタン・クリック回数を指定してクリック。右クリック・ダブルクリックに対応し、既定は合成入力 |
 | `activateNode` | `ButtonBase.fire()` でマウス入力なしにボタンを起動 |
 | `requestFocus` | ノードにキーボードフォーカスを要求 |
-| `typeKey` | キー入力イベントを送信（`ENTER`・`TAB` 等のキーコード対応） |
+| `typeKey` | 修飾キー付きのキー入力を送信。既定は合成入力で、Robot による実キー送出も選択可 |
 | `takeScreenshot` | ノードまたはシーン全体のスクリーンショットを PNG 保存 |
 | `captureVideo` | ノードまたは任意のウィンドウシーンを最大30秒の MP4/H.264 で保存 |
 
@@ -203,6 +203,8 @@ $CLI <PID> double-click-node <NODE_ID> --mode robot
 $CLI <PID> activate-node <BUTTON_NODE_ID>
 $CLI <PID> focus <NODE_ID>
 $CLI <PID> type-key ENTER
+$CLI <PID> type-key TAB --modifiers SHIFT
+$CLI <PID> type-key W --modifiers META --mode robot
 
 # スクリーンショット
 $CLI <PID> screenshot ./result.png

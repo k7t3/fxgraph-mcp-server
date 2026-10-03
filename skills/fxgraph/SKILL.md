@@ -136,7 +136,10 @@ Use `--button secondary` for a right click and `--clickCount 2` for a double cli
 For menu items, inspect `node.disabled` in `node-details`; omitted means false, while the rendered
 Node's `disable` property alone may not reflect the MenuItem state.
 Use `activate-node` for a deterministic `ButtonBase.fire()` action without mouse input. `type-key`
-remains synthetic.
+defaults to synthetic key gestures; use `--modifiers SHIFT` for Shift+Tab or `--modifiers META --mode robot`
+for native macOS shortcuts. Robot key input requires native keyboard focus and OS permissions, and
+returns failures without synthetic fallback. Verify the application effect; termination may close
+the connection before a response.
 
 ## Apply command invariants
 

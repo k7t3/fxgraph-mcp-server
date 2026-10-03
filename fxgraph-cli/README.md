@@ -55,7 +55,7 @@ java -jar fxgraph-cli.jar <pid> <command> [params-json]
 | `double-click-node` | `click-node --clickCount 2` のショートカット | `<nodeId>`, `--mode`, `--button` |
 | `activate-node` | マウス入力なしに `ButtonBase` を起動 | `<nodeId>` |
 | `focus` | ノードにフォーカスを当てる | `<nodeId>` |
-| `type-key` | キー入力を送信 | `<key>`, `--nodeId` |
+| `type-key` | 修飾キー付きのキー入力を送信 | `<key>`, `--nodeId`, `--modifiers META,SHIFT`, `--mode synthetic\|robot` |
 | `screenshot` | スクリーンショットを保存 | `<path>`, `--nodeId`, `--stageId`, `--maxWidth`, `--maxHeight` |
 | `capture-video` | MP4 動画クリップを保存 | `<path>`, `--nodeId`, `--stageId`, `--durationSeconds`, `--framesPerSecond`, `--maxWidth`, `--maxHeight` |
 
@@ -97,6 +97,8 @@ java -jar fxgraph-cli.jar $PID double-click-node $NODE_ID --mode robot
 java -jar fxgraph-cli.jar $PID activate-node $BUTTON_NODE_ID
 java -jar fxgraph-cli.jar $PID focus $NODE_ID
 java -jar fxgraph-cli.jar $PID type-key ENTER
+java -jar fxgraph-cli.jar $PID type-key TAB --modifiers SHIFT
+java -jar fxgraph-cli.jar $PID type-key W --modifiers META --mode robot
 
 # スクリーンショット
 java -jar fxgraph-cli.jar $PID screenshot ./result.png
