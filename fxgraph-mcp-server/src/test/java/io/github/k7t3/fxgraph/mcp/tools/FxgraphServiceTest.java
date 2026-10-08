@@ -333,10 +333,10 @@ class FxgraphServiceTest {
     void clickNodeSendsButtonAndClickCount() throws Exception {
         stubSuccessfulMapResponse();
 
-        service.clickNode(PID, 42, "robot", "secondary", 2);
+        service.clickNode(PID, 42, "synthetic", "secondary", 2);
 
         assertThat(capturedCommand().getParams()).containsEntry("nodeId", 42)
-                .containsEntry("mode", "robot").containsEntry("button", "secondary")
+                .containsEntry("mode", "synthetic").containsEntry("button", "secondary")
                 .containsEntry("clickCount", 2);
     }
 
@@ -392,6 +392,16 @@ class FxgraphServiceTest {
         var command = capturedCommand();
         assertEquals("a", command.getParams().get("key"));
         assertFalse(command.getParams().containsKey("nodeId"));
+    }
+
+    @Test
+    void typeKeySendsModifiersAndMode() throws Exception {
+        stubSuccessfulMapResponse();
+
+        service.typeKey(PID, "Q", null, List.of("META", "SHIFT"), "synthetic");
+
+        assertThat(capturedCommand().getParams()).containsEntry("modifiers", List.of("META", "SHIFT"))
+                .containsEntry("mode", "synthetic").doesNotContainKey("nodeId");
     }
 
     @Test

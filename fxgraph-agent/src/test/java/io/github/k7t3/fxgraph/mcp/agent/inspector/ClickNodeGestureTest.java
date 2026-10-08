@@ -6,6 +6,12 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.ButtonType;
+import javafx.animation.PauseTransition;
+import javafx.util.Duration;
 import javafx.scene.control.TextField;
 import javafx.scene.input.ContextMenuEvent;
 import javafx.scene.input.MouseButton;
@@ -28,6 +34,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -90,6 +97,85 @@ class ClickNodeGestureTest {
                 MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED, MouseEvent.MOUSE_CLICKED,
                 MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED, MouseEvent.MOUSE_CLICKED);
         assertThat(events).extracting(MouseEvent::getClickCount).containsExactly(1, 1, 1, 2, 2, 2);
+    }
+
+    @Test
+    void syntheticClickIsAcceptedByHandlersThatIgnoreTouchInput() {
+        var rectangle = new Rectangle(40, 40);
+        var accepted = new AtomicInteger();
+        rectangle.setOnMouseClicked(event -> {
+            if (!event.isSynthesized()) accepted.incrementAndGet();
+        });
+        show(rectangle);
+
+        var response = inspector.clickNode(Map.of("nodeId", System.identityHashCode(rectangle)));
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(accepted).hasValue(1);
+    }
+
+    @Test
+    void syntheticClickOpensSubmenu() {
+        var submenu = new Menu("Submenu", null, new MenuItem("Nested action"));
+        var button = new MenuButton("Options", null, submenu);
+        show(button);
+        var container = new AtomicReference<Node>();
+        onFx(() -> {
+            button.show();
+            var popup = (ContextMenu) javafx.stage.Window.getWindows().stream()
+                    .filter(w -> w instanceof ContextMenu && w.isShowing()).findFirst().orElseThrow();
+            menus.add(popup);
+            popup.getScene().getRoot().applyCss();
+            popup.getScene().getRoot().layout();
+            container.set(popup.getScene().getRoot().lookupAll(".menu-item").stream()
+                    .filter(n -> n.getProperties().get(MenuItem.class) == submenu).findFirst().orElseThrow());
+        });
+
+        var response = inspector.clickNode(Map.of("nodeId", System.identityHashCode(container.get())));
+
+        assertThat(response.isSuccess()).isTrue();
+        onFx(() -> assertThat(submenu.isShowing()).isTrue());
+    }
+
+    @Test
+    void menuActionOpeningModalDialogReturnsBeforeDialogIsDismissed() {
+        var dialog = new AtomicReference<Dialog<Void>>();
+        var actions = new AtomicInteger();
+        var item = new MenuItem("Open dialog");
+        item.setOnAction(event -> {
+            actions.incrementAndGet();
+            var modal = new Dialog<Void>();
+            modal.initOwner(stage);
+            modal.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+            dialog.set(modal);
+            var timeout = new PauseTransition(Duration.seconds(12));
+            timeout.setOnFinished(e -> modal.close());
+            timeout.play();
+            modal.showAndWait();
+            timeout.stop();
+        });
+        var anchor = new Button("Menu");
+        var menu = new ContextMenu(item);
+        menus.add(menu);
+        anchor.setContextMenu(menu);
+        show(anchor);
+        var container = new AtomicReference<Node>();
+        onFx(() -> {
+            menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+            menu.getScene().getRoot().applyCss();
+            menu.getScene().getRoot().layout();
+            container.set(menu.getScene().getRoot().lookup(".menu-item"));
+        });
+
+        try {
+            var response = inspector.clickNode(Map.of("nodeId", System.identityHashCode(container.get())));
+
+            assertThat(response.isSuccess()).as(response.getError()).isTrue();
+            assertThat(actions).hasValue(1);
+            onFx(() -> assertThat(dialog.get().isShowing()).isTrue());
+        } finally {
+            onFx(() -> { if (dialog.get() != null) dialog.get().close(); });
+        }
     }
 
     @Test
@@ -182,39 +268,20 @@ class ClickNodeGestureTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"secondary", "middle"})
-    void robotClickDeliversRequestedButton(String button) {
+    @ValueSource(strings = {"robot", "native"})
+    void unsupportedModeDoesNotDispatchEvents(String mode) {
         var rectangle = new Rectangle(40, 40);
         var events = new ArrayList<MouseEvent>();
-        rectangle.setOnMouseClicked(events::add);
+        rectangle.addEventFilter(MouseEvent.ANY, events::add);
         show(rectangle);
 
         var response = inspector.clickNode(Map.of(
-                "nodeId", System.identityHashCode(rectangle), "mode", "robot", "button", button));
+                "nodeId", System.identityHashCode(rectangle), "mode", mode, "clickCount", 2));
         WaitForAsyncUtils.waitForFxEvents();
 
-        assertThat(response.isSuccess()).isTrue();
-        assertThat(response.getData()).isInstanceOf(Map.class);
-        assertThat(((Map<?, ?>) response.getData()).get("mode")).isEqualTo("robot");
-        assertThat(events).hasSize(1);
-        assertThat(events.getFirst().getButton().name()).isEqualToIgnoringCase(button);
-        assertThat(events.getFirst().isSynthesized()).isFalse();
-    }
-
-    @Test
-    void robotDoubleClickDeliversCountTwo() {
-        var rectangle = new Rectangle(40, 40);
-        var events = new ArrayList<MouseEvent>();
-        rectangle.setOnMouseClicked(events::add);
-        show(rectangle);
-
-        var response = inspector.clickNode(Map.of(
-                "nodeId", System.identityHashCode(rectangle), "mode", "robot", "clickCount", 2));
-        WaitForAsyncUtils.waitForFxEvents();
-
-        assertThat(response.isSuccess()).isTrue();
-        assertThat(((Map<?, ?>) response.getData()).get("mode")).isEqualTo("robot");
-        assertThat(events).extracting(MouseEvent::getClickCount).containsExactly(1, 2);
+        assertThat(response.isSuccess()).isFalse();
+        assertThat(response.getError()).contains("Only synthetic input is supported");
+        assertThat(events).isEmpty();
     }
 
     @Test
@@ -239,25 +306,22 @@ class ClickNodeGestureTest {
     }
 
     @Test
-    void robotFallbackPreservesButtonAndDoubleClick() {
-        var fallbackInspector = new SceneGraphInspector((point, button, count) -> {
-            throw new UnsupportedOperationException("Robot unavailable");
-        });
+    void rejectedRobotModeDoesNotOpenContextMenu() {
+        var menuRequests = new AtomicInteger();
         var rectangle = new Rectangle(40, 40);
         var events = new ArrayList<MouseEvent>();
         rectangle.setOnMouseClicked(events::add);
+        rectangle.setOnContextMenuRequested(event -> menuRequests.incrementAndGet());
         show(rectangle);
 
-        var response = fallbackInspector.clickNode(Map.of(
+        var response = inspector.clickNode(Map.of(
                 "nodeId", System.identityHashCode(rectangle), "mode", "robot",
                 "button", "secondary", "clickCount", 2));
 
-        assertThat(response.isSuccess()).isTrue();
-        var data = (Map<?, ?>) response.getData();
-        assertThat(data.get("mode")).isEqualTo("synthetic");
-        assertThat(data.get("fallbackReason")).isEqualTo("Robot unavailable");
-        assertThat(events).extracting(MouseEvent::getClickCount).containsExactly(1, 2);
-        assertThat(events).allMatch(event -> event.getButton() == MouseButton.SECONDARY);
+        assertThat(response.isSuccess()).isFalse();
+        assertThat(response.getError()).contains("Only synthetic input is supported");
+        assertThat(events).isEmpty();
+        assertThat(menuRequests).hasValue(0);
     }
 
     @Test

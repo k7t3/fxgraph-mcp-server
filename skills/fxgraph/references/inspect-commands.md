@@ -112,11 +112,12 @@ $CLI $PID find-nodes [OPTIONS]
 
 | Option | Description |
 |---|---|
-| `--type TYPE` | Match the JavaFX class simple name, such as `Button` |
+| `--type TYPE` | Match a Node class simple name, such as `Button`, or a superclass name |
 | `--id ID` | Match the node CSS ID |
 | `--text TEXT` | Match text contained by `Labeled` or `TextInputControl` nodes |
 | `--styleClass CLASS` | Match one style-class entry |
 | `--stageId ID` | Limit the search to one window; the option name is retained for compatibility |
+| `--visible-only` | Return only effectively visible nodes |
 
 Combine filters to reduce ambiguity:
 
@@ -126,10 +127,46 @@ $CLI $PID find-nodes --id submitBtn --stageId "$STAGE_ID"
 ```
 
 Output is a JSON array of compact matches containing `nodeId`, `type`, and, when present, `id`,
-`text`, and `visible`.
+`text`, `visible`, `parentId`, `inScene`, `effectiveVisible`, and `clipped`.
+When a node is not effectively visible, `visibilityReason` explains the cause.
+
+`--type` searches actual `Node` classes, including application-defined subclasses. FXML controllers
+and view classes that do not extend `Node` are not searchable; locate their root node by its class,
+CSS ID, or style class. `MenuItem` / `CheckMenuItem` are not Nodes either: search their currently
+rendered `MenuItemContainer` skin nodes after opening the menu.
+
+`visible` describes only the node's own flag. `effectiveVisible` also checks ancestors (including
+SubScene boundaries), window state/opacity, zero-size bounds, clips, and the scene viewport.
+`clipped: true` can also indicate a partially visible node. This is a bounding-box estimate;
+it does not detect coverage by sibling nodes, overlays, other windows, or holes in shaped clips.
+Detached nodes and nodes in hidden windows are outside the searchable graph; stale IDs return
+`Node not found`.
 
 For popup content, open the popup, obtain its ID from `stages`, and pass that ID to `--stageId`.
 Without the option, the search includes all currently showing Stage and popup windows.
+Popup scenes and skin nodes may be recreated every time a popup opens. Rerun `stages` and then
+`find-nodes --stageId "$POPUP_ID"` on every opening, even when the owner window is unchanged.
+
+An empty option value or a missing value is rejected with the option name and usage. Check that
+shell variables are populated before invoking commands; `--stageId "" --text "Close"` reports
+`--stageId requires a non-empty value` and does not consume `--text` as its value.
+
+---
+
+## window-details
+
+Read the selected showing Stage or PopupWindow's public state:
+
+```bash
+$CLI $PID window-details --stageId "$STAGE_ID"
+# Positional form is also supported
+$CLI $PID window-details "$STAGE_ID"
+```
+
+The result includes `stageId`, `windowType`, `x`, `y`, `width`, `height`, `opacity`, `focused`,
+`showing`, and `rootNodeId` when there is a scene. Stage entries also include `title`, `maximized`,
+`iconified`, `alwaysOnTop`, and `resizable`. Popup entries may include `ownerWindowId`.
+Window-manager changes may be asynchronous; read details again after changing a property.
 
 ---
 
@@ -158,12 +195,19 @@ $CLI $PID scenegraph [OPTIONS]
 ```json
 {
   "nodeId": 987654321,
-  "type": "Button"
+  "type": "Button",
+  "parentId": 123456789,
+  "inScene": true,
+  "effectiveVisible": true,
+  "clipped": false
 }
 ```
 
 Field presence rules:
 - `id` — only when a CSS ID is set
+- `parentId` — containing node ID; omitted for the scene root. A SubScene root points to its SubScene.
+- `inScene`, `effectiveVisible`, `clipped` — always included
+- `visibilityReason` — included when not effectively visible
 - `visible` — only when `false` (default is `true`)
 - `styleClass` — only when non-empty
 - `bounds` — only with `--bounds`
@@ -217,6 +261,7 @@ $CLI $PID node-details $NODE_ID --filter text,visible,disable
 $CLI $PID node-details $NODE_ID --filter items          # list/table item count
 $CLI $PID node-details $NODE_ID --filter text,style     # label/button content
 $CLI $PID node-details $NODE_ID --filter focused,disabled,managed
+$CLI $PID node-details $NODE_ID --filter text --ancestors
 
 # Full dump (only when you need everything — output is very large)
 $CLI $PID node-details $NODE_ID
@@ -246,6 +291,11 @@ $CLI $PID node-details $NODE_ID
 ```
 
 **Property categories:** `layout`, `style`, `visual`, `content`, `interaction`, `properties`.
+
+`--ancestors` adds an `ancestors` array, ordered from the immediate container to the scene root.
+Each entry has `nodeId`, `type`, optional `id` / `styleClass`, and `bounds` in its parent's
+coordinates. Paths cross SubScene boundaries. The normal `node` object also includes `parentId`
+and visibility diagnostics, independently of `--filter`.
 
 ---
 

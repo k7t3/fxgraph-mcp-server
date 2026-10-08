@@ -155,14 +155,21 @@ class McpServerStdioIntegrationTest {
                 "connectApplication",
                 "disconnectApplication",
                 "getStages",
+                "getWindowDetails",
+                "setWindowProperty",
+                "closeWindow",
+                "closePopup",
                 "getScenegraph",
                 "getNodeDetails",
+                "findNodes",
                 "setProperty",
                 "selectNode",
                 "clickNode",
                 "activateNode",
                 "requestFocus",
                 "typeKey",
+                "scrollNode",
+                "scrollToIndex",
                 "takeScreenshot",
                 "captureVideo"
         );
@@ -171,6 +178,7 @@ class McpServerStdioIntegrationTest {
             assertTrue(toolNames.contains(expected),
                     "Tool '" + expected + "' should be registered. Found tools: " + toolNames);
         }
+        assertThat(toolNames).containsExactlyInAnyOrderElementsOf(expectedTools);
     }
 
     @Test
@@ -224,6 +232,29 @@ class McpServerStdioIntegrationTest {
 
         assertThat(tool.inputSchema().properties()).containsKeys("button", "clickCount");
         assertThat(tool.inputSchema().required()).doesNotContain("button", "clickCount");
+    }
+
+    @Test
+    void typeKeyExposesOptionalModifiersAndMode() {
+        client.initialize();
+        var tool = client.listTools().tools().stream()
+                .filter(candidate -> "typeKey".equals(candidate.name())).findFirst().orElseThrow();
+
+        assertThat(tool.inputSchema().properties()).containsKeys("modifiers", "mode");
+        assertThat(tool.inputSchema().required()).doesNotContain("modifiers", "mode");
+    }
+
+    @Test
+    void inspectionToolsExposeOptionalAncestorsAndVisibilityFilter() {
+        client.initialize();
+        var tools = client.listTools().tools();
+        var details = tools.stream().filter(t -> t.name().equals("getNodeDetails")).findFirst().orElseThrow();
+        var find = tools.stream().filter(t -> t.name().equals("findNodes")).findFirst().orElseThrow();
+
+        assertThat(details.inputSchema().properties()).containsKey("includeAncestors");
+        assertThat(details.inputSchema().required()).doesNotContain("includeAncestors");
+        assertThat(find.inputSchema().properties()).containsKey("effectiveVisible");
+        assertThat(find.inputSchema().required()).doesNotContain("effectiveVisible");
     }
 
     // ===== Tool Invocation =====

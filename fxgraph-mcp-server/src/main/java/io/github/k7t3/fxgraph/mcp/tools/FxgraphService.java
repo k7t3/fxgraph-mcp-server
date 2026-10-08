@@ -117,6 +117,46 @@ public class FxgraphService {
         return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.GET_STAGES));
     }
 
+    /** Reads public geometry and state from the selected showing window. */
+    @Tool(description = "Get geometry and state of a showing Stage or PopupWindow: x, y, width, height, opacity, focused, showing, and Stage-specific maximized, iconified, alwaysOnTop, resizable, title.")
+    public Map<String, Object> getWindowDetails(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "Window ID from stages.stageId") String stageId) {
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.GET_WINDOW_DETAILS, Map.of("stageId", stageId)));
+    }
+
+    /** Sets a validated public Stage property and returns the previous and current values. */
+    @Tool(description = "Set a Stage property: x, y, width, height, opacity, title, maximized, iconified, alwaysOnTop, or resizable. Numbers must be finite; dimensions positive; opacity 0 through 1. Returns oldValue and newValue. Window-manager changes may be asynchronous; re-read window details.")
+    public Map<String, Object> setWindowProperty(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "Stage ID from stages.stageId") String stageId,
+            @ToolParam(description = "Supported Stage property name") String propertyName,
+            @ToolParam(description = "New value as string") String value,
+            @ToolParam(description = "Type hint: number, boolean or string; inferred when omitted", required = false) String valueType) {
+        var params = new LinkedHashMap<String, Object>();
+        params.put("stageId", stageId);
+        params.put("propertyName", propertyName);
+        params.put("value", value);
+        if (valueType != null) params.put("valueType", valueType);
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.SET_WINDOW_PROPERTY, params));
+    }
+
+    /** Requests close through the application's normal window event handlers. */
+    @Tool(description = "Fire WINDOW_CLOSE_REQUEST for the selected window. The application may consume the request. closeRequested means delivered; closed reports the window being hidden; handlerPending means a modal handler is still waiting. Does not force close or synthesize OS shortcuts.")
+    public Map<String, Object> closeWindow(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "Window ID from stages.stageId") String stageId) {
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.CLOSE_WINDOW, Map.of("stageId", stageId)));
+    }
+
+    /** Hides a selected popup without dismissing ordinary Stage windows. */
+    @Tool(description = "Hide the selected PopupWindow, such as ContextMenu or Tooltip. Rejects ordinary Stages. Embedded overlays such as AtlantaFX ModalPane require their own close action or documented display-property workaround.")
+    public Map<String, Object> closePopup(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "Popup ID from stages.stageId") String stageId) {
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.CLOSE_POPUP, Map.of("stageId", stageId)));
+    }
+
     @Tool(description = "Get scene graph trees for showing JavaFX Stage and PopupWindow scenes. Returns compact hierarchical trees by default. Use depth to limit tree depth, includeBounds to include node bounding boxes, includeProperties to get property details, propertyFilter to limit which properties, and includeTransforms for transform details.")
     public Map<String, Object> getScenegraph(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
@@ -139,28 +179,36 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.GET_SCENEGRAPH, params));
     }
 
-    @Tool(description = "Get detailed information about a specific node including all its properties, children summary, bounds, style classes, and more. Use the nodeId obtained from getScenegraph. Optionally filter properties with propertyFilter.")
+    @Tool(description = "Get a node's properties, children, bounds, style classes, parentId and effective visibility. Use a current nodeId from getScenegraph/findNodes. propertyFilter selects properties; includeAncestors adds the nearest-first containment path to the scene root, including SubScene boundaries.")
     public Map<String, Object> getNodeDetails(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID (identityHashCode of the JavaFX Node)") int nodeId,
-            @ToolParam(description = "List of property names to include (e.g., ['text', 'value']). Omit to get all properties.", required = false) List<String> propertyFilter) {
+            @ToolParam(description = "List of property names to include (e.g., ['text', 'value']). Omit to get all properties.", required = false) List<String> propertyFilter,
+            @ToolParam(description = "Include ancestors from immediate container to scene root, crossing SubScene boundaries", required = false) Boolean includeAncestors) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("nodeId", nodeId);
         if (propertyFilter != null) params.put("propertyFilter", propertyFilter);
+        if (includeAncestors != null) params.put("includeAncestors", includeAncestors);
 
         return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.GET_NODE_DETAILS, params));
     }
 
-    @Tool(description = "Search showing JavaFX Stage and PopupWindow scene graphs by type, CSS id, text content, or style class. Returns matching nodes with their nodeId, type, id, and text. Use stageId to limit search to a specific window.")
+    /** Preserves the Java caller overload without ancestor information. */
+    public Map<String, Object> getNodeDetails(int pid, int nodeId, List<String> propertyFilter) {
+        return getNodeDetails(pid, nodeId, propertyFilter, null);
+    }
+
+    @Tool(description = "Search showing Stage and PopupWindow scenes by Node class/superclass, CSS id, text or style class. Non-Node FXML controllers and MenuItem objects cannot match; search open menus' rendering nodes instead. Returns node IDs, parentId and effective visibility. stageId selects a window; effectiveVisible filters visibility. Reacquire IDs after reopening popups or recycling virtualized cells.")
     public Map<String, Object> findNodes(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "JavaFX class name to filter (e.g., 'Button', 'TextField'). Omit to match all types.", required = false) String type,
             @ToolParam(description = "CSS id (fx:id) to match exactly. Omit to match all ids.", required = false) String id,
             @ToolParam(description = "Text content to search for (case-sensitive contains match). Omit to match all text.", required = false) String text,
             @ToolParam(description = "Style class name to filter. Omit to match all style classes.", required = false) String styleClass,
-            @ToolParam(description = "Window ID from the stageId field. Omit to search all showing Stage and PopupWindow scenes.", required = false) String stageId) {
+            @ToolParam(description = "Window ID from the stageId field. Omit to search all showing Stage and PopupWindow scenes.", required = false) String stageId,
+            @ToolParam(description = "Filter by effective visibility, accounting for ancestors, opacity, clipping and scene viewport; does not detect occlusion by other nodes/windows", required = false) Boolean effectiveVisible) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         if (type != null) params.put("type", type);
@@ -168,9 +216,40 @@ public class FxgraphService {
         if (text != null) params.put("text", text);
         if (styleClass != null) params.put("styleClass", styleClass);
         if (stageId != null) params.put("stageId", stageId);
+        if (effectiveVisible != null) params.put("effectiveVisible", effectiveVisible);
 
         return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.FIND_NODES, params));
+    }
+
+    /** Preserves the Java caller overload without a visibility filter. */
+    public Map<String, Object> findNodes(int pid, String type, String id, String text, String styleClass, String stageId) {
+        return findNodes(pid, type, id, text, styleClass, stageId, null);
+    }
+
+    /** Scrolls supported containers and lays out the new visible cells before responding. */
+    @Tool(description = "Scroll a ListView, TableView, ScrollPane, JavaFX VirtualFlow, Flowless VirtualFlow or VirtualizedScrollPane. Use dx/dy pixels (positive right/down) or align (top/bottom/left/right), exclusively. Re-run findNodes afterwards because virtualized cell IDs may change.")
+    public Map<String, Object> scrollNode(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "Scrollable container node ID") int nodeId,
+            @ToolParam(description = "Horizontal pixel delta, positive right", required = false) Double dx,
+            @ToolParam(description = "Vertical pixel delta, positive down", required = false) Double dy,
+            @ToolParam(description = "Edge: top, bottom, left or right. Cannot be combined with dx/dy", required = false) String align) {
+        var params = new LinkedHashMap<String, Object>();
+        params.put("nodeId", nodeId);
+        if (dx != null) params.put("dx", dx);
+        if (dy != null) params.put("dy", dy);
+        if (align != null) params.put("align", align);
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.SCROLL_NODE, params));
+    }
+
+    /** Reveals a zero-based item in a supported virtualized container. */
+    @Tool(description = "Reveal a zero-based index in a ListView, TableView, JavaFX VirtualFlow or Flowless VirtualFlow (including a VirtualizedScrollPane wrapping one). Rejects indices outside the item list. Re-run findNodes afterwards to obtain current cell IDs.")
+    public Map<String, Object> scrollToIndex(
+            @ToolParam(description = "Process ID of the target JavaFX application") int pid,
+            @ToolParam(description = "Virtualized container node ID") int nodeId,
+            @ToolParam(description = "Zero-based item index") int index) {
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.SCROLL_TO_INDEX, Map.of("nodeId", nodeId, "index", index)));
     }
 
     // ===================================================
@@ -214,16 +293,16 @@ public class FxgraphService {
      *
      * @param pid process ID of the target JavaFX application
      * @param nodeId node ID in the current target JVM session
-     * @param mode synthetic (default) or robot; null selects the default
+     * @param mode synthetic only; null selects the default
      * @param button primary (default), secondary or middle; null selects the default
      * @param clickCount 1 (default) or 2; null selects the default
-     * @return agent response with the effective mode, button, click count and any fallback reason
+     * @return agent response with the synthetic mode, button and click count
      */
-    @Tool(description = "Click a JavaFX node by nodeId with primary, secondary (right), or middle button and one or two clicks. Uses synthetic gestures by default without moving the system pointer or requesting focus. Secondary clicks request a context menu. Robot input is available explicitly; native multi-click recognition depends on the OS.")
+    @Tool(description = "Click a node with primary, secondary or middle button and one or two clicks. Dispatches JavaFX gestures without OS pointer movement or window focus. Secondary clicks request a context menu; standard submenus receive mouse-enter. Only synthetic input is supported. handlerPending=true means a dispatched action is waiting in a modal handler: inspect its dialog and verify the eventual result, without repeating the action.")
     public Map<String, Object> clickNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID") int nodeId,
-            @ToolParam(description = "Click mode: synthetic (default) or robot", required = false)
+            @ToolParam(description = "Click mode: synthetic only (default)", required = false)
                     String mode,
             @ToolParam(description = "Mouse button: primary (default), secondary (right), or middle", required = false)
                     String button,
@@ -251,7 +330,7 @@ public class FxgraphService {
      *
      * @param pid target process ID
      * @param nodeId node ID in the current target JVM session
-     * @param mode synthetic (default) or robot; null selects the default
+     * @param mode synthetic only; null selects the default
      * @return agent response describing the delivered click
      */
     public Map<String, Object> clickNode(int pid, int nodeId, String mode) {
@@ -276,7 +355,7 @@ public class FxgraphService {
      * @param nodeId button node ID in the current target JVM session
      * @return agent response describing whether activation succeeded
      */
-    @Tool(description = "Activate a JavaFX ButtonBase by nodeId through its semantic fire action without emitting mouse events.")
+    @Tool(description = "Activate a ButtonBase through fire() without mouse events. handlerPending=true means a dispatched action is waiting in a modal handler: inspect its dialog and verify the eventual result, without repeating the action.")
     public Map<String, Object> activateNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "ButtonBase node ID") int nodeId) {
@@ -299,28 +378,54 @@ public class FxgraphService {
                 new AgentCommand(AgentCommand.CommandType.REQUEST_FOCUS, params));
     }
 
-    @Tool(description = "Type a key into a JavaFX node using JavaFX Event System. If nodeId is omitted, the currently focused node is used.")
+    /**
+     * Submits a synthetic JavaFX key gesture with optional modifiers.
+     *
+     * @param pid target JVM process ID
+     * @param key key code name or exact single character
+     * @param nodeId target node, or null for the focused scene
+     * @param modifiers modifier names, or null for none
+     * @param mode synthetic only; null selects the default
+     * @return agent input submission result, not a guarantee that a shortcut completed
+     */
+    @Tool(description = "Send a synthetic JavaFX key gesture to a node or the focused scene. Supports SHIFT, CTRL/CONTROL, ALT, CMD/META modifiers and exact single characters. Only synthetic input is supported; no OS input permissions are required. Application event handlers and scene accelerators may handle shortcuts; native OS shortcuts are not sent. Termination may close the connection before a response.")
     public Map<String, Object> typeKey(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Key text or key code name (e.g. 'a', 'ENTER')") String key,
-            @ToolParam(description = "Target node ID (optional, defaults to focused node)", required = false) Integer nodeId) {
+            @ToolParam(description = "Target node ID (optional, defaults to focused scene)", required = false) Integer nodeId,
+            @ToolParam(description = "Modifier names: SHIFT, CTRL/CONTROL, ALT, CMD/META (e.g. ['META', 'SHIFT'])", required = false) List<String> modifiers,
+            @ToolParam(description = "Input mode: synthetic only (default)", required = false) String mode) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("key", key);
         if (nodeId != null) params.put("nodeId", nodeId);
+        if (modifiers != null) params.put("modifiers", modifiers);
+        if (mode != null) params.put("mode", mode);
 
         return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.TYPE_KEY, params));
     }
 
-    @Tool(description = "Take a screenshot of a specific node or one JavaFX window scene, including an individually selected popup scene. Saves PNG to the specified path.")
+    /**
+     * Sends a synthetic key gesture without modifiers.
+     *
+     * @param pid target JVM process ID
+     * @param key key code name or single character
+     * @param nodeId target node, or null for the focused scene
+     * @return agent input submission result
+     */
+    public Map<String, Object> typeKey(int pid, String key, Integer nodeId) {
+        return typeKey(pid, key, nodeId, null, null);
+    }
+
+    @Tool(description = "Save a node or single window scene as PNG, including a selected popup scene. Preserves original dimensions by default; optional maxWidth/maxHeight shrink while preserving aspect ratio, with zero unlimited. Returns sourceWidth/sourceHeight and scaled. Rejects source images over 8192 pixels per axis or 16777216 pixels total before allocation.")
     public Map<String, Object> takeScreenshot(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Target node ID (optional; if omitted, captures full scene graph)", required = false) Integer nodeId,
             @ToolParam(description = "Window ID from the stageId field for scene capture (optional; defaults to the first Stage)", required = false) String stageId,
             @ToolParam(description = "Path to save the PNG screenshot") String savePath,
-            @ToolParam(description = "Maximum width for the screenshot (default: 1280)", required = false) Integer maxWidth,
-            @ToolParam(description = "Maximum height for the screenshot (default: 720)", required = false) Integer maxHeight) {
+            @ToolParam(description = "Resize limit for screenshot width; omitted or 0 preserves source resolution. Sources are limited to 8192 per dimension and 16777216 pixels total", required = false) Integer maxWidth,
+            @ToolParam(description = "Resize limit for screenshot height; omitted or 0 preserves source resolution", required = false) Integer maxHeight) {
 
         Map<String, Object> params = new LinkedHashMap<>();
         if (nodeId != null) params.put("nodeId", nodeId);

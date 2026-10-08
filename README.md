@@ -8,6 +8,9 @@ Java Attach API でターゲット JVM にインスペクタエージェント�
 
 - **シーングラフ探索** — Stage と表示中のポップアップを含む JavaFX ウィンドウ・ノードツリーを JSON で取得
 - **ノード検索** — タイプ・CSS ID・テキスト・スタイルクラスからノードを検索
+- **祖先・表示状態** — 所属セルまでの祖先パス、実効表示状態と非表示の理由を取得
+- **ウィンドウ操作** — Stage の位置・サイズ・状態の取得と変更、終了要求、ポップアップを閉じる操作
+- **スクロール** — ListView・TableView・ScrollPane・VirtualFlow・Flowless をピクセル／項目インデックスで操作
 - **プロパティ読み取り・変更** — テキスト・スタイル・表示状態などのプロパティを動的に操作
 - **UI インタラクション** — クリック・フォーカス・キー入力を JavaFX イベントシステム経由で送信
 - **ノードハイライト** — 対象ノードを視覚的なオーバーレイでハイライト表示
@@ -19,7 +22,7 @@ Java Attach API でターゲット JVM にインスペクタエージェント�
 ```
 MCP Client (AI / OpenCode)
   └─[STDIO]─► McpServerApplication (Spring Boot)
-                └─► FxgraphService (@Tool × 13 メソッド)
+                └─► FxgraphService (@Tool × 21 メソッド)
                       └─► JavaFxAgent (Attach API + TCP socket)
                             └─[TCP NDJSON]─► FxGraphInspectorAgent (注入済みエージェント)
                                                └─► SceneGraphInspector
@@ -119,15 +122,21 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `connectApplication` | PID 指定でインスペクタエージェントを準備 |
 | `disconnectApplication` | PID 指定でインスペクタエージェントを停止 |
 | `getStages` | 表示中のウィンドウ（Stage・ContextMenu・Tooltip 等）の一覧・種類・サイズ・位置を取得 |
+| `getWindowDetails` | Stage・ポップアップの詳細と Stage の最大化・最小化等の状態を取得 |
+| `setWindowProperty` | Stage の位置・サイズ・公開プロパティを変更 |
+| `closeWindow` | `WINDOW_CLOSE_REQUEST` を送信し、アプリ側のキャンセルを尊重 |
+| `closePopup` | 指定した `PopupWindow` を閉じる |
 | `getScenegraph` | シーングラフのツリー構造を取得（深さ・プロパティ・バウンズ指定可） |
-| `getNodeDetails` | 特定ノードの詳細プロパティを取得 |
-| `findNodes` | タイプ・CSS ID・テキスト・スタイルクラスからノードを検索 |
+| `getNodeDetails` | 特定ノードの詳細、実効表示状態、任意の祖先パスを取得 |
+| `findNodes` | タイプ・CSS ID・テキスト・スタイルクラス・実効表示状態からノードを検索 |
+| `scrollNode` | ピクセル指定または端へのスクロール |
+| `scrollToIndex` | 仮想化コンテナの項目を0始まりのインデックスで表示 |
 | `setProperty` | ノードのプロパティ値を変更（text・style・visible 等） |
 | `selectNode` | ノードを視覚的にハイライト（赤枠オーバーレイ）。`nodeId=0` で解除 |
 | `clickNode` | ボタン・クリック回数を指定してクリック。右クリック・ダブルクリックに対応し、既定は合成入力 |
 | `activateNode` | `ButtonBase.fire()` でマウス入力なしにボタンを起動 |
 | `requestFocus` | ノードにキーボードフォーカスを要求 |
-| `typeKey` | キー入力イベントを送信（`ENTER`・`TAB` 等のキーコード対応） |
+| `typeKey` | 修飾キー付きのキー入力を送信。JavaFX 合成イベントで操作し、OS の入力権限に依存しない |
 | `takeScreenshot` | ノードまたはシーン全体のスクリーンショットを PNG 保存 |
 | `captureVideo` | ノードまたは任意のウィンドウシーンを最大30秒の MP4/H.264 で保存 |
 
@@ -185,6 +194,16 @@ $CLI <PID> find-nodes --styleClass primary-action --stageId <STAGE_ID>
 
 # ノードの詳細プロパティを取得（--filter 必須）
 $CLI <PID> node-details <NODE_ID> --filter text,visible,disable
+$CLI <PID> node-details <NODE_ID> --filter text --ancestors
+$CLI <PID> find-nodes --type Button --visible-only
+
+# ウィンドウ操作・仮想化リスト
+$CLI <PID> window-details --stageId <STAGE_ID>
+$CLI <PID> set-window-property <STAGE_ID> x 100 --type number
+$CLI <PID> close-window <STAGE_ID>
+$CLI <PID> close-popup <POPUP_ID>
+$CLI <PID> scroll-to-index <LIST_NODE_ID> --index 10
+$CLI <PID> scroll-node <LIST_NODE_ID> --dy 500
 
 # プロパティを変更
 $CLI <PID> set-property <NODE_ID> text "Hello"
@@ -195,16 +214,18 @@ $CLI <PID> select-node <NODE_ID>
 
 # クリック・論理起動・フォーカス・キー入力
 $CLI <PID> click-node <NODE_ID>
-$CLI <PID> click-node <NODE_ID> --mode robot
+$CLI <PID> click-node <NODE_ID> --mode synthetic
 $CLI <PID> click-node <NODE_ID> --button secondary
 $CLI <PID> click-node <NODE_ID> --clickCount 2
 $CLI <PID> right-click-node <NODE_ID>
-$CLI <PID> double-click-node <NODE_ID> --mode robot
+$CLI <PID> double-click-node <NODE_ID>
 $CLI <PID> activate-node <BUTTON_NODE_ID>
 $CLI <PID> focus <NODE_ID>
 $CLI <PID> type-key ENTER
+$CLI <PID> type-key TAB --modifiers SHIFT
+$CLI <PID> type-key W --modifiers META
 
-# スクリーンショット
+# スクリーンショット（既定は元の解像度、縮小時は scaled と元サイズを返す）
 $CLI <PID> screenshot ./result.png
 $CLI <PID> screenshot ./node.png --nodeId <NODE_ID>
 
@@ -219,6 +240,8 @@ $CLI <PID> capture-video ./node.mp4 --nodeId <NODE_ID> --durationSeconds 10
 > Stage とポップアップのどちらのウィンドウ ID にも使用できます。
 
 CLI の完全なオプション仕様は `skills/fxgraph/references/` を参照してください。
+スクリーンショットの元画像は1辺8192px・総16777216pxまでです。`--no-limit` もこの安全上限内で動作します。
+スクロール後やポップアップを開くたびに `find-nodes` を再実行し、現在のノード ID を取得してください。
 
 ## テスト実行
 
