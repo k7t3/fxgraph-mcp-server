@@ -100,16 +100,15 @@ class TypeKeyGestureTest {
         assertThat(actions).hasValue(1);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"synthetic", "robot"})
-    void shiftTabMovesFocusToPreviousControl(String mode) {
+    @Test
+    void shiftTabMovesFocusToPreviousControl() {
         var first = new TextField();
         var second = new TextField();
         show(first, second);
         onFx(second::requestFocus);
 
         var response = inspector.typeKey(Map.of("nodeId", id(second), "key", "TAB",
-                "modifiers", List.of("SHIFT"), "mode", mode));
+                "modifiers", List.of("SHIFT"), "mode", "synthetic"));
 
         assertThat(response.isSuccess()).as(response.getError()).isTrue();
         onFx(() -> assertThat(stage.getScene().getFocusOwner()).isSameAs(first));
@@ -201,12 +200,12 @@ class TypeKeyGestureTest {
 
     @Test
     void invalidModeDoesNotDispatchEvents() {
-        assertRejected(Map.of("key", "Q", "mode", "native"), "Unsupported key mode");
+        assertRejected(Map.of("key", "Q", "mode", "native"), "Only synthetic input is supported");
     }
 
     @Test
-    void robotRejectsCharactersWithoutKeyCodes() {
-        assertRejected(Map.of("key", "あ", "mode", "robot"), "Robot mode requires a key code");
+    void robotModeDoesNotDispatchEvents() {
+        assertRejected(Map.of("key", "Q", "mode", "robot"), "Only synthetic input is supported");
     }
 
     @Test
@@ -215,33 +214,21 @@ class TypeKeyGestureTest {
     }
 
     @Test
-    void robotInputReachesFocusedField() {
-        var field = new TextField();
-        show(field);
+    void rejectedRobotModePreservesFocusAndText() {
+        var first = new TextField("first");
+        var second = new TextField("second");
+        show(first, second);
+        onFx(first::requestFocus);
 
-        var response = inspector.typeKey(Map.of("nodeId", id(field), "key", "a",
-                "modifiers", List.of("SHIFT"), "mode", "robot"));
-
-        assertThat(response.isSuccess()).as(response.getError()).isTrue();
-        assertThat(((Map<?, ?>) response.getData()).get("mode")).isEqualTo("robot");
-        WaitForAsyncUtils.waitForFxEvents();
-        onFx(() -> assertThat(field.getText()).isEqualTo("A"));
-    }
-
-    @Test
-    void robotFailureDoesNotFallBackToSyntheticEvents() {
-        var target = new Rectangle(40, 40);
-        var events = recordEvents(target);
-        show(target);
-        var unavailable = new SceneGraphInspector((point, button, count) -> {}, () -> {
-            throw new SecurityException("Robot unavailable");
-        });
-
-        var response = unavailable.typeKey(Map.of("nodeId", id(target), "key", "Q", "mode", "robot"));
+        var response = inspector.typeKey(Map.of("nodeId", id(second), "key", "a", "mode", "robot"));
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getError()).contains("Robot unavailable");
-        assertThat(events).isEmpty();
+        assertThat(response.getError()).contains("Only synthetic input is supported");
+        onFx(() -> {
+            assertThat(stage.getScene().getFocusOwner()).isSameAs(first);
+            assertThat(first.getText()).isEqualTo("first");
+            assertThat(second.getText()).isEqualTo("second");
+        });
     }
 
     private void assertRejected(Map<String, Object> options, String error) {

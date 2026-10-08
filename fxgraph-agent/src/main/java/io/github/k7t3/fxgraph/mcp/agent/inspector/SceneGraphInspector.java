@@ -6,6 +6,7 @@ import javafx.beans.value.ObservableValue;
 import javafx.beans.value.WritableValue;
 import javafx.collections.ObservableList;
 import javafx.event.EventType;
+import javafx.event.Event;
 import javafx.geometry.Bounds;
 import javafx.geometry.Point2D;
 import javafx.scene.Node;
@@ -14,6 +15,7 @@ import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.ButtonBase;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.Menu;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.image.WritablePixelFormat;
@@ -23,12 +25,12 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.input.PickResult;
 import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
-import javafx.scene.robot.Robot;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import javafx.stage.PopupWindow;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import javafx.stage.WindowEvent;
 import org.jcodec.api.awt.AWTSequenceEncoder;
 
 import javax.imageio.ImageIO;
@@ -54,8 +56,10 @@ public class SceneGraphInspector {
 
     private static final String SPACE_CHAR = " ";
 
-    private static final int DEFAULT_SCREENSHOT_MAX_WIDTH = 1280;
-    private static final int DEFAULT_SCREENSHOT_MAX_HEIGHT = 720;
+    private static final int DEFAULT_VIDEO_MAX_WIDTH = 1280;
+    private static final int DEFAULT_VIDEO_MAX_HEIGHT = 720;
+    private static final int MAX_SNAPSHOT_DIMENSION = 8192;
+    private static final long MAX_SNAPSHOT_PIXELS = 16_777_216;
     private static final int DEFAULT_VIDEO_DURATION_SECONDS = 5;
     private static final int MAX_VIDEO_DURATION_SECONDS = 30;
     private static final int DEFAULT_VIDEO_FRAMES_PER_SECOND = 10;
@@ -64,27 +68,6 @@ public class SceneGraphInspector {
     /** Tracks highlighted overlay nodes so they can be removed. */
     private Node currentHighlight;
     private Parent currentHighlightParent;
-    private final RobotClicker robotClicker;
-    private final java.util.function.Supplier<KeyInput.Keyboard> keyboardFactory;
-
-    public SceneGraphInspector() {
-        this((point, button, clickCount) -> {
-            var robot = new Robot();
-            robot.mouseMove(point);
-            for (var count = 0; count < clickCount; count++) {
-                robot.mouseClick(button);
-            }
-        });
-    }
-
-    SceneGraphInspector(RobotClicker robotClicker) {
-        this(robotClicker, KeyInput::robotKeyboard);
-    }
-
-    SceneGraphInspector(RobotClicker robotClicker, java.util.function.Supplier<KeyInput.Keyboard> keyboardFactory) {
-        this.robotClicker = Objects.requireNonNull(robotClicker);
-        this.keyboardFactory = Objects.requireNonNull(keyboardFactory);
-    }
 
     // =============================================
     // GET_STAGES
@@ -96,6 +79,81 @@ public class SceneGraphInspector {
             return AgentResponse.success(windows);
         } catch (Exception e) {
             return AgentResponse.error("Failed to get stages: " + e.getMessage());
+        }
+    }
+
+    /** Returns geometry and public state of a showing Stage or PopupWindow identified by stageId. */
+    public AgentResponse getWindowDetails(Map<String, Object> params) {
+        try {
+            return AgentResponse.success(runOnFxThread(() -> WindowOperations.details(WindowOperations.requireWindow(params))));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to get window details: " + describeFailure(e));
+        }
+    }
+
+    /** Sets a supported Stage property after validating its type and numeric range. */
+    public AgentResponse setWindowProperty(Map<String, Object> params) {
+        try {
+            return AgentResponse.success(runOnFxThread(() -> WindowOperations.setProperty(params)));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to set window property: " + describeFailure(e));
+        }
+    }
+
+    /** Fires WINDOW_CLOSE_REQUEST. A consumed request leaves the window open. */
+    public AgentResponse closeWindow(Map<String, Object> params) {
+        try {
+            var window = runOnFxThread(() -> WindowOperations.requireWindow(params));
+            var closed = new java.util.concurrent.atomic.AtomicBoolean();
+            var outcome = runInteraction(() -> {
+                Event.fireEvent(window, new WindowEvent(window, WindowEvent.WINDOW_CLOSE_REQUEST));
+                closed.set(!window.isShowing());
+                return null;
+            });
+            return AgentResponse.success(Map.of("stageId", windowId(window), "closeRequested", true,
+                    "closed", closed.get(), "handlerPending", outcome.handlerPending()));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to close window: " + describeFailure(e));
+        }
+    }
+
+    /** Hides the selected PopupWindow, rejecting ordinary Stages. Embedded overlays are not windows. */
+    public AgentResponse closePopup(Map<String, Object> params) {
+        try {
+            return runOnFxThread(() -> {
+                var window = WindowOperations.requireWindow(params);
+                if (!(window instanceof PopupWindow popup)) return AgentResponse.error("Window is not a PopupWindow: " + windowId(window));
+                popup.hide();
+                return AgentResponse.success(Map.of("stageId", windowId(window), "closed", !popup.isShowing()));
+            });
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to close popup: " + describeFailure(e));
+        }
+    }
+
+    /** Scrolls a supported container by pixels or to an edge; positive deltas move down/right. */
+    public AgentResponse scrollNode(Map<String, Object> params) {
+        return scroll(params, false);
+    }
+
+    /** Reveals a zero-based item in a ListView, TableView, or supported VirtualFlow. */
+    public AgentResponse scrollToIndex(Map<String, Object> params) {
+        return scroll(params, true);
+    }
+
+    private AgentResponse scroll(Map<String, Object> params, boolean byIndex) {
+        try {
+            if (params == null || !(params.get("nodeId") instanceof Number id)) return AgentResponse.error("nodeId is required");
+            return runOnFxThread(() -> {
+                var node = findNodeById(id.intValue());
+                if (node == null) return AgentResponse.error("Node not found: " + id);
+                var visibility = NodeVisibility.evaluate(node);
+                if (!visibility.effectiveVisible()) return AgentResponse.error("Node is not effectively visible: " + id + " (" + visibility.reason() + ")");
+                if (node.isDisabled()) return AgentResponse.error("Node is disabled: " + id);
+                return AgentResponse.success(byIndex ? ScrollOperations.scrollToIndex(node, params) : ScrollOperations.scroll(node, params));
+            });
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to scroll node: " + describeFailure(e));
         }
     }
 
@@ -114,6 +172,9 @@ public class SceneGraphInspector {
 
             List<Map<String, Object>> results = runOnFxThread(() ->
                     searchNodes(typeFilter, idFilter, textFilter, styleClassFilter, stageIdFilter));
+            if (params != null && params.get("effectiveVisible") instanceof Boolean visible) {
+                results = results.stream().filter(info -> visible.equals(info.get("effectiveVisible"))).toList();
+            }
             return AgentResponse.success(results);
         } catch (Exception e) {
             return AgentResponse.error("Failed to find nodes: " + e.getMessage());
@@ -175,6 +236,9 @@ public class SceneGraphInspector {
             String text = getTextContent(node);
             if (text != null) info.put("text", text);
             info.put("visible", node.isVisible());
+            NodeVisibility.evaluate(node).addTo(info);
+            var parent = NodeHierarchy.parentOf(node);
+            if (parent != null) info.put("parentId", System.identityHashCode(parent));
             results.add(info);
         }
 
@@ -303,7 +367,8 @@ public class SceneGraphInspector {
             List<String> propertyFilter = params.get("propertyFilter") != null
                     ? (List<String>) params.get("propertyFilter") : null;
 
-            Map<String, Object> result = runOnFxThread(() -> collectNodeDetails(nodeId, propertyFilter));
+            var includeAncestors = Boolean.TRUE.equals(params.get("includeAncestors"));
+            Map<String, Object> result = runOnFxThread(() -> collectNodeDetails(nodeId, propertyFilter, includeAncestors));
             if (result == null) {
                 return AgentResponse.error("Node not found: " + nodeId);
             }
@@ -313,7 +378,7 @@ public class SceneGraphInspector {
         }
     }
 
-    private Map<String, Object> collectNodeDetails(int nodeId, List<String> propertyFilter) {
+    private Map<String, Object> collectNodeDetails(int nodeId, List<String> propertyFilter, boolean includeAncestors) {
         Node node = findNodeById(nodeId);
         if (node == null) return null;
 
@@ -338,6 +403,17 @@ public class SceneGraphInspector {
             childrenSummary.add(childInfo);
         }
         result.put("children", childrenSummary);
+
+        if (includeAncestors) {
+            var path = NodeHierarchy.pathTo(node.getScene().getRoot(), node);
+            var ancestors = new ArrayList<Map<String, Object>>();
+            for (var index = path.size() - 2; index >= 0; index--) {
+                ancestors.add(serializeNodeLightweight(path.get(index), 0, 0,
+                        false, null, false, true,
+                        index > 0 ? System.identityHashCode(path.get(index - 1)) : null));
+            }
+            result.put("ancestors", ancestors);
+        }
 
         return result;
     }
@@ -473,17 +549,14 @@ public class SceneGraphInspector {
     // =============================================
 
     /**
-     * Clicks a node through JavaFX Robot or a complete synthetic mouse gesture.
+     * Clicks a node through a complete JavaFX synthetic mouse gesture.
      *
-     * <p>The optional {@code mode} parameter accepts {@code synthetic} or {@code robot} and
-     * defaults to {@code synthetic}, which does not move the system pointer or request window focus.
-     * Explicit Robot failures automatically fall back to synthetic input, with the effective mode
-     * and failure reason included in the successful response.
+     * <p>The optional {@code mode} parameter accepts only {@code synthetic}, which does not move
+     * the system pointer or request window focus. Other modes are rejected before sending input.
      *
      * <p>{@code button} accepts {@code primary} (default), {@code secondary}, or {@code middle}.
      * {@code clickCount} accepts 1 (default) or 2. Synthetic double clicks send two complete gestures
      * with increasing counts. Secondary synthetic clicks also request a context menu.
-     * Robot click counts depend on native multi-click recognition.
      *
      * @param params command parameters with {@code nodeId}, optional {@code mode}, {@code button},
      *               and integer {@code clickCount}
@@ -495,29 +568,22 @@ public class SceneGraphInspector {
                 return AgentResponse.error("nodeId is required");
             }
             var nodeId = ((Number) params.get("nodeId")).intValue();
-            var mode = ClickMode.from(params.get("mode"));
+            requireSyntheticMode(params);
             var options = ClickOptions.from(params);
 
-            var outcome = runOnFxThread(() -> doClickNode(nodeId, mode, options));
+            var outcome = runInteraction(() -> doClickNode(nodeId, options));
             if (outcome.error() != null) {
                 return AgentResponse.error(outcome.error());
             }
-            if (outcome.mode() == ClickMode.ROBOT) {
-                // Robot posts platform input asynchronously; this barrier lets queued events run
-                // before the command reports success to a client that may immediately inspect state.
-                runOnFxThread(() -> null);
-            }
             var data = new LinkedHashMap<String, Object>();
             data.put("clicked", true);
-            data.put("mode", outcome.mode().value());
+            data.put("mode", "synthetic");
             data.put("button", options.button().name().toLowerCase(Locale.ROOT));
             data.put("clickCount", options.clickCount());
-            if (outcome.fallbackReason() != null) {
-                data.put("fallbackReason", outcome.fallbackReason());
-            }
+            if (outcome.handlerPending()) data.put("handlerPending", true);
             return AgentResponse.success(data);
         } catch (Exception e) {
-            return AgentResponse.error("Failed to click node: " + e.getMessage());
+            return AgentResponse.error("Failed to click node: " + describeFailure(e));
         }
     }
 
@@ -537,13 +603,13 @@ public class SceneGraphInspector {
             }
             var nodeId = ((Number) params.get("nodeId")).intValue();
 
-            var error = runOnFxThread(() -> doActivateNode(nodeId));
-            if (error != null) {
-                return AgentResponse.error(error);
+            var outcome = runInteraction(() -> doActivateNode(nodeId));
+            if (outcome.error() != null) {
+                return AgentResponse.error(outcome.error());
             }
-            return AgentResponse.success(Map.of("activated", true));
+            return AgentResponse.success(Map.of("activated", true, "handlerPending", outcome.handlerPending()));
         } catch (Exception e) {
-            return AgentResponse.error("Failed to activate node: " + e.getMessage());
+            return AgentResponse.error("Failed to activate node: " + describeFailure(e));
         }
     }
 
@@ -566,9 +632,9 @@ public class SceneGraphInspector {
 
     /**
      * Sends a key gesture to the selected node or focused scene.
-     * Robot input requests native focus and reports failure without synthetic fallback.
+     * Input is dispatched inside JavaFX without native input or OS permission requirements.
      *
-     * @param params key, optional nodeId, modifier array, and synthetic (default) or robot mode
+     * @param params key, optional nodeId, modifier array, and optional synthetic mode
      * @return input submission result; successful submission does not guarantee shortcut execution
      */
     public AgentResponse typeKey(Map<String, Object> params) {
@@ -576,6 +642,7 @@ public class SceneGraphInspector {
             if (params == null || params.get("key") == null) {
                 return AgentResponse.error("key is required");
             }
+            requireSyntheticMode(params);
             var stroke = KeyInput.parse(params);
             Integer nodeId = params.get("nodeId") != null ? ((Number) params.get("nodeId")).intValue() : null;
             var target = runOnFxThread(() -> nodeId != null ? findNodeById(nodeId) : findFocusedNode());
@@ -583,27 +650,15 @@ public class SceneGraphInspector {
                 return AgentResponse.error(nodeId != null ? "Node not found: " + nodeId : "No focused node found");
             }
             var error = runOnFxThread(() -> {
-                if (!isEffectivelyVisible(target)) return "Node is not visible: " + nodeId;
+                var visibility = NodeVisibility.evaluate(target);
+                if (!visibility.effectiveVisible()) return "Node is not effectively visible: " + nodeId + " (" + visibility.reason() + ")";
                 if (target.isDisabled()) return "Node is disabled: " + nodeId;
-                if (stroke.mode() == KeyInput.Mode.ROBOT) target.getScene().getWindow().requestFocus();
                 target.requestFocus();
+                KeyInput.synthetic(target, stroke);
                 return null;
             });
             if (error != null) return AgentResponse.error(error);
-            if (stroke.mode() == KeyInput.Mode.ROBOT) {
-                if (!awaitKeyboardFocus(target)) return AgentResponse.error("Target window or node did not acquire keyboard focus");
-                runOnFxThread(() -> {
-                    if (!hasKeyboardFocus(target)) throw new IllegalStateException("Target lost keyboard focus before Robot input");
-                    KeyInput.robot(keyboardFactory.get(), stroke);
-                    return null;
-                });
-            } else {
-                runOnFxThread(() -> {
-                    KeyInput.synthetic(target, stroke);
-                    return null;
-                });
-            }
-            return AgentResponse.success(Map.of("typed", true, "mode", stroke.mode().name().toLowerCase(Locale.ROOT)));
+            return AgentResponse.success(Map.of("typed", true, "mode", "synthetic"));
         } catch (IllegalArgumentException e) {
             return AgentResponse.error(e.getMessage());
         } catch (InterruptedException e) {
@@ -623,8 +678,8 @@ public class SceneGraphInspector {
                 return AgentResponse.error("savePath is required");
             }
 
-            int maxWidth = extractMaxDimension(params, "maxWidth", DEFAULT_SCREENSHOT_MAX_WIDTH);
-            int maxHeight = extractMaxDimension(params, "maxHeight", DEFAULT_SCREENSHOT_MAX_HEIGHT);
+            int maxWidth = screenshotDimension(params, "maxWidth");
+            int maxHeight = screenshotDimension(params, "maxHeight");
 
             Map<String, Object> screenshot = runOnFxThread(() -> doTakeScreenshot(nodeId, stageId, savePath, maxWidth, maxHeight));
             if (screenshot == null) {
@@ -635,7 +690,7 @@ public class SceneGraphInspector {
             }
             return AgentResponse.success(screenshot);
         } catch (Exception e) {
-            return AgentResponse.error("Failed to take screenshot: " + e.getMessage());
+            return AgentResponse.error("Failed to take screenshot: " + describeFailure(e));
         }
     }
 
@@ -676,13 +731,13 @@ public class SceneGraphInspector {
             var maxWidth = extractBoundedInteger(
                     params,
                     "maxWidth",
-                    DEFAULT_SCREENSHOT_MAX_WIDTH,
+                    DEFAULT_VIDEO_MAX_WIDTH,
                     2,
                     Integer.MAX_VALUE);
             var maxHeight = extractBoundedInteger(
                     params,
                     "maxHeight",
-                    DEFAULT_SCREENSHOT_MAX_HEIGHT,
+                    DEFAULT_VIDEO_MAX_HEIGHT,
                     2,
                     Integer.MAX_VALUE);
 
@@ -726,59 +781,44 @@ public class SceneGraphInspector {
         return value;
     }
 
-    private int extractMaxDimension(Map<String, Object> params, String key, int defaultValue) {
-        if (params == null || params.get(key) == null) {
-            return defaultValue;
+    private int screenshotDimension(Map<String, Object> params, String key) {
+        if (params == null || params.get(key) == null) return 0;
+        var value = params.get(key);
+        if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())
+                || number.doubleValue() != number.intValue() || number.intValue() < 0) {
+            throw new IllegalArgumentException(key + " must be a non-negative integer (0 means no resize limit)");
         }
-        return ((Number) params.get(key)).intValue();
+        return number.intValue();
     }
 
-    private ClickOutcome doClickNode(int nodeId, ClickMode mode, ClickOptions options) {
+    private String doClickNode(int nodeId, ClickOptions options) {
         var node = findNodeById(nodeId);
-        if (node == null) return ClickOutcome.failure("Node not found: " + nodeId);
-        if (!isEffectivelyVisible(node)) {
-            return ClickOutcome.failure("Node is not visible: " + nodeId);
-        }
-        if (isInteractionDisabled(node)) return ClickOutcome.failure("Node is disabled: " + nodeId);
+        if (node == null) return "Node not found: " + nodeId;
+        var visibility = NodeVisibility.evaluate(node);
+        if (!visibility.effectiveVisible()) return "Node is not effectively visible: " + nodeId + " (" + visibility.reason() + ")";
+        if (isInteractionDisabled(node)) return "Node is disabled: " + nodeId;
 
         var bounds = node.getBoundsInLocal();
         if (hasZeroSize(node, bounds)) {
-            return ClickOutcome.failure("Node is not visible or has zero size: " + nodeId);
+            return "Node is not visible or has zero size: " + nodeId;
         }
 
         double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
         double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
         var screenCoordinates = node.localToScreen(localX, localY);
         if (screenCoordinates == null) {
-            return ClickOutcome.failure("Node is not attached to a showing window: " + nodeId);
+            return "Node is not attached to a showing window: " + nodeId;
         }
 
-        if (mode == ClickMode.SYNTHETIC) {
-            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY(), options);
-            return ClickOutcome.success(mode);
-        }
-
-        var window = node.getScene() != null ? node.getScene().getWindow() : null;
-        if (window != null) {
-            window.requestFocus();
-        }
-
-        try {
-            robotClicker.click(screenCoordinates, options.button(), options.clickCount());
-            return ClickOutcome.success(mode);
-        } catch (RuntimeException exception) {
-            fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY(), options);
-            var reason = exception.getMessage() != null
-                    ? exception.getMessage()
-                    : exception.getClass().getSimpleName();
-            return ClickOutcome.fallback(reason);
-        }
+        fireSyntheticClick(node, localX, localY, screenCoordinates.getX(), screenCoordinates.getY(), options);
+        return null;
     }
 
     private String doActivateNode(int nodeId) {
         var node = findNodeById(nodeId);
         if (node == null) return "Node not found: " + nodeId;
-        if (!isEffectivelyVisible(node)) return "Node is not visible: " + nodeId;
+        var visibility = NodeVisibility.evaluate(node);
+        if (!visibility.effectiveVisible()) return "Node is not effectively visible: " + nodeId + " (" + visibility.reason() + ")";
         if (node.isDisabled()) return "Node is disabled: " + nodeId;
 
         var bounds = node.getBoundsInLocal();
@@ -801,6 +841,17 @@ public class SceneGraphInspector {
             double screenY,
             ClickOptions options) {
         var sceneCoordinates = node.localToScene(localX, localY);
+
+        if (options.button() == MouseButton.PRIMARY) {
+            for (var current = node; current != null; current = current.getParent()) {
+                if (current.hasProperties() && current.getProperties().get(MenuItem.class) instanceof Menu) {
+                    // Standard submenu skins select their parent menu on MOUSE_ENTERED.
+                    current.fireEvent(createSyntheticMouseEvent(current, MouseEvent.MOUSE_ENTERED,
+                            sceneCoordinates, screenX, screenY, options.button(), 0));
+                    break;
+                }
+            }
+        }
 
         // Control skins may implement activation on press or release rather than MOUSE_CLICKED.
         for (var count = 1; count <= options.clickCount(); count++) {
@@ -840,7 +891,7 @@ public class SceneGraphInspector {
                 pressed && button == MouseButton.PRIMARY,
                 pressed && button == MouseButton.MIDDLE,
                 pressed && button == MouseButton.SECONDARY,
-                true, button == MouseButton.SECONDARY && eventType == MouseEvent.MOUSE_RELEASED, true,
+                false, button == MouseButton.SECONDARY && eventType == MouseEvent.MOUSE_RELEASED, true,
                 new PickResult(node, sceneCoordinates.getX(), sceneCoordinates.getY())
         );
     }
@@ -869,50 +920,12 @@ public class SceneGraphInspector {
         }
     }
 
-    private enum ClickMode {
-        ROBOT("robot"),
-        SYNTHETIC("synthetic");
-
-        private final String value;
-
-        ClickMode(String value) {
-            this.value = value;
+    private static void requireSyntheticMode(Map<String, Object> params) {
+        var mode = params.get("mode");
+        if (mode != null && !"synthetic".equalsIgnoreCase(String.valueOf(mode))) {
+            throw new IllegalArgumentException(
+                    "Unsupported input mode: " + mode + ". Only synthetic input is supported");
         }
-
-        private String value() {
-            return value;
-        }
-
-        private static ClickMode from(Object value) {
-            if (value == null) {
-                return SYNTHETIC;
-            }
-            return switch (String.valueOf(value).toLowerCase(Locale.ROOT)) {
-                case "robot" -> ROBOT;
-                case "synthetic" -> SYNTHETIC;
-                default -> throw new IllegalArgumentException(
-                        "Unsupported click mode: " + value + ". Expected robot or synthetic");
-            };
-        }
-    }
-
-    private record ClickOutcome(String error, ClickMode mode, String fallbackReason) {
-        private static ClickOutcome success(ClickMode mode) {
-            return new ClickOutcome(null, mode, null);
-        }
-
-        private static ClickOutcome fallback(String reason) {
-            return new ClickOutcome(null, ClickMode.SYNTHETIC, reason);
-        }
-
-        private static ClickOutcome failure(String error) {
-            return new ClickOutcome(error, null, null);
-        }
-    }
-
-    @FunctionalInterface
-    interface RobotClicker {
-        void click(Point2D point, MouseButton button, int clickCount);
     }
 
     private boolean isInteractionDisabled(Node node) {
@@ -936,36 +949,11 @@ public class SceneGraphInspector {
                 && (region.getWidth() == 0 || region.getHeight() == 0);
     }
 
-    private boolean isEffectivelyVisible(Node node) {
-        for (var current = node; current != null; current = current.getParent()) {
-            if (!current.isVisible()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private Boolean doRequestFocus(int nodeId) {
         Node node = findNodeById(nodeId);
         if (node == null) return false;
         node.requestFocus();
         return true;
-    }
-
-    private boolean awaitKeyboardFocus(Node target) throws Exception {
-        if (Platform.isFxApplicationThread()) return hasKeyboardFocus(target);
-        var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-        do {
-            if (runOnFxThread(() -> hasKeyboardFocus(target))) return true;
-            Thread.sleep(25);
-        } while (System.nanoTime() < deadline);
-        return false;
-    }
-
-    private boolean hasKeyboardFocus(Node target) {
-        var scene = target.getScene();
-        return scene != null && scene.getWindow() != null && scene.getWindow().isShowing()
-                && scene.getWindow().isFocused() && scene.getFocusOwner() == target;
     }
 
     private Map<String, Object> doTakeScreenshot(Integer nodeId, String stageId, String savePath, int maxWidth, int maxHeight) {
@@ -976,17 +964,26 @@ public class SceneGraphInspector {
         if (nodeId != null) {
             Node node = findNodeById(nodeId);
             if (node == null) return null;
+            node.getScene().getRoot().applyCss();
+            node.getScene().getRoot().layout();
+            var bounds = node.getBoundsInParent();
+            verifySnapshotSize(bounds.getMinX(), bounds.getMinY(), bounds.getWidth(), bounds.getHeight());
             image = node.snapshot(new SnapshotParameters(), null);
             targetType = "node";
             targetId = String.valueOf(nodeId);
         } else {
             Window window = findWindow(stageId);
             if (window == null || window.getScene() == null) return null;
+            window.getScene().getRoot().applyCss();
+            window.getScene().getRoot().layout();
+            verifySnapshotSize(0, 0, window.getScene().getWidth(), window.getScene().getHeight());
             image = window.getScene().snapshot(null);
             targetType = "scenegraph";
             targetId = windowId(window);
         }
 
+        var sourceWidth = (int) image.getWidth();
+        var sourceHeight = (int) image.getHeight();
         image = scaleImage(image, maxWidth, maxHeight);
         String savedPath = savePng(image, Paths.get(savePath));
 
@@ -995,9 +992,26 @@ public class SceneGraphInspector {
         result.put("savedPath", savedPath);
         result.put("width", (int) image.getWidth());
         result.put("height", (int) image.getHeight());
+        result.put("sourceWidth", sourceWidth);
+        result.put("sourceHeight", sourceHeight);
+        result.put("scaled", sourceWidth != (int) image.getWidth() || sourceHeight != (int) image.getHeight());
         result.put("targetType", targetType);
         result.put("targetId", targetId);
         return result;
+    }
+
+    private static void verifySnapshotSize(double x, double y, double width, double height) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(width) || !Double.isFinite(height)
+                || width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Snapshot requires positive, finite source dimensions");
+        }
+        // JavaFX snapshots round both edges outward, which can add a pixel at fractional coordinates.
+        var pixelsWide = Math.ceil(x + width) - Math.floor(x);
+        var pixelsHigh = Math.ceil(y + height) - Math.floor(y);
+        if (pixelsWide > MAX_SNAPSHOT_DIMENSION || pixelsHigh > MAX_SNAPSHOT_DIMENSION
+                || pixelsWide * pixelsHigh > MAX_SNAPSHOT_PIXELS) {
+            throw new IllegalArgumentException("Source exceeds snapshot safety limit: 8192 pixels per dimension and 16777216 pixels total. Capture a smaller node or window");
+        }
     }
 
     private Map<String, Object> doCaptureVideo(
@@ -1167,11 +1181,12 @@ public class SceneGraphInspector {
     private WritableImage scaleImage(WritableImage image, int maxWidth, int maxHeight) {
         int width = (int) image.getWidth();
         int height = (int) image.getHeight();
-        double scale = Math.min(Math.min(maxWidth / (double) width, maxHeight / (double) height), 1.0);
+        double scale = Math.min(Math.min(maxWidth > 0 ? maxWidth / (double) width : 1.0,
+                maxHeight > 0 ? maxHeight / (double) height : 1.0), 1.0);
         if (scale >= 1.0) return image;
 
-        int newWidth = (int) (width * scale);
-        int newHeight = (int) (height * scale);
+        int newWidth = Math.max(1, (int) (width * scale));
+        int newHeight = Math.max(1, (int) (height * scale));
 
         BufferedImage src = toBufferedImage(image);
         BufferedImage dst = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
@@ -1277,6 +1292,13 @@ public class SceneGraphInspector {
                                                            Integer parentId) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("nodeId", System.identityHashCode(node));
+
+        if (parentId != null) {
+            result.put("parentId", parentId);
+        } else if (NodeHierarchy.parentOf(node) != null) {
+            result.put("parentId", System.identityHashCode(NodeHierarchy.parentOf(node)));
+        }
+        NodeVisibility.evaluate(node).addTo(result);
 
         // CSS id: only emit when set
         String fxId = node.getId();
@@ -1632,5 +1654,34 @@ public class SceneGraphInspector {
             }
         });
         return future.get(10, TimeUnit.SECONDS);
+    }
+
+    private record InteractionOutcome(String error, boolean handlerPending) {}
+
+    private InteractionOutcome runInteraction(java.util.function.Supplier<String> task) throws Exception {
+        if (Platform.isFxApplicationThread()) return new InteractionOutcome(task.get(), false);
+        var future = new CompletableFuture<InteractionOutcome>();
+        Platform.runLater(() -> {
+            // showAndWait starts a nested loop while the action handler is still on the stack.
+            // A queued acknowledgement lets clients inspect and dismiss that dialog.
+            Platform.runLater(() -> {
+                if (!future.isDone() && Platform.isNestedLoopRunning()) {
+                    future.complete(new InteractionOutcome(null, true));
+                }
+            });
+            try {
+                future.complete(new InteractionOutcome(task.get(), false));
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            }
+        });
+        return future.get(10, TimeUnit.SECONDS);
+    }
+
+    private static String describeFailure(Throwable failure) {
+        while (failure.getCause() != null && failure.getCause() != failure) failure = failure.getCause();
+        if (failure instanceof java.util.concurrent.TimeoutException) return "Timed out waiting for the JavaFX thread";
+        return failure.getMessage() == null || failure.getMessage().isBlank()
+                ? failure.getClass().getSimpleName() : failure.getMessage();
     }
 }

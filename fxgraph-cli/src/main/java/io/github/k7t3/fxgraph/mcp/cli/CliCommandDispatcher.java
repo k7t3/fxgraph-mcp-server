@@ -57,7 +57,8 @@ public class CliCommandDispatcher {
                     "No command specified after PID " + pid
                     + ". Available commands: stages, scenegraph, node-details, find-nodes, set-property,"
                     + " select-node, click-node, right-click-node, double-click-node, activate-node,"
-                    + " focus, type-key, screenshot, capture-video");
+                    + " focus, type-key, window-details, set-window-property, close-window, close-popup,"
+                    + " scroll-node, scroll-to-index, screenshot, capture-video");
         }
 
         return runWithAgent(pid, Arrays.copyOfRange(args, 1, args.length));
@@ -98,6 +99,10 @@ public class CliCommandDispatcher {
         try {
             return switch (command) {
                 case "stages"       -> cmdStages(agent);
+                case "window-details" -> cmdWindow(agent, args, AgentCommand.CommandType.GET_WINDOW_DETAILS);
+                case "set-window-property" -> cmdSetWindowProperty(agent, args);
+                case "close-window" -> cmdWindow(agent, args, AgentCommand.CommandType.CLOSE_WINDOW);
+                case "close-popup" -> cmdWindow(agent, args, AgentCommand.CommandType.CLOSE_POPUP);
                 case "scenegraph"   -> cmdScenegraph(agent, args);
                 case "node-details" -> cmdNodeDetails(agent, args);
                 case "find-nodes"   -> cmdFindNodes(agent, args);
@@ -107,10 +112,14 @@ public class CliCommandDispatcher {
                 case "activate-node" -> cmdActivateNode(agent, args);
                 case "focus"        -> cmdFocus(agent, args);
                 case "type-key"     -> cmdTypeKey(agent, args);
+                case "scroll-node", "scroll-to-index" -> cmdScroll(agent, args);
                 case "screenshot"   -> cmdScreenshot(agent, args);
                 case "capture-video" -> cmdCaptureVideo(agent, args);
                 default             -> CliJsonOutput.failure("Unknown command: " + command);
             };
+        } catch (IllegalArgumentException e) {
+            return CliJsonOutput.failure("Command failed: " + e.getMessage()
+                    + "\nUsage: fxgraph <pid> " + command + " [options]");
         } catch (Exception e) {
             return CliJsonOutput.failure("Command failed: " + e.getMessage());
         }
@@ -124,6 +133,36 @@ public class CliCommandDispatcher {
         AgentResponse resp = agent.sendCommand(
                 new AgentCommand(AgentCommand.CommandType.GET_STAGES));
         return outputResponse(resp);
+    }
+
+    private static int cmdWindow(JavaFxAgent agent, String[] args, AgentCommand.CommandType type) throws Exception {
+        var params = new LinkedHashMap<String, Object>();
+        var start = 1;
+        if (args.length > 1 && !args[1].startsWith("--")) {
+            if (args[1].isBlank()) throw new IllegalArgumentException("stageId requires a non-empty value");
+            params.put("stageId", args[1]);
+            start = 2;
+        }
+        for (var i = start; i < args.length; i++) {
+            if ("--stageId".equals(args[i])) params.put("stageId", requireNext(args, ++i, "--stageId"));
+            else throw new IllegalArgumentException(unknownOptionMessage(args[i]));
+        }
+        if (!params.containsKey("stageId")) throw new IllegalArgumentException(args[0] + " requires <stageId> or --stageId <id>");
+        return outputResponse(agent.sendCommand(new AgentCommand(type, params)));
+    }
+
+    private static int cmdSetWindowProperty(JavaFxAgent agent, String[] args) throws Exception {
+        if (args.length < 4) throw new IllegalArgumentException("set-window-property requires <stageId> <property> <value> [--type TYPE]");
+        if (args[1].isBlank()) throw new IllegalArgumentException("stageId requires a non-empty value");
+        var params = new LinkedHashMap<String, Object>();
+        params.put("stageId", args[1]);
+        params.put("propertyName", args[2]);
+        params.put("value", args[3]);
+        for (var i = 4; i < args.length; i++) {
+            if ("--type".equals(args[i])) params.put("valueType", requireNext(args, ++i, "--type"));
+            else throw new IllegalArgumentException(unknownOptionMessage(args[i]));
+        }
+        return outputResponse(agent.sendCommand(new AgentCommand(AgentCommand.CommandType.SET_WINDOW_PROPERTY, params)));
     }
 
     private static int cmdScenegraph(JavaFxAgent agent, String[] args) throws Exception {
@@ -157,6 +196,8 @@ public class CliCommandDispatcher {
             if ("--filter".equals(args[i])) {
                 params.put("propertyFilter",
                         Arrays.asList(requireNext(args, ++i, "--filter").split(",")));
+            } else if ("--ancestors".equals(args[i])) {
+                params.put("includeAncestors", true);
             } else if ("--props".equals(args[i])) {
                 throw new IllegalArgumentException(
                         "--props is not valid for node-details. " +
@@ -180,6 +221,7 @@ public class CliCommandDispatcher {
                 case "--text"      -> params.put("text", requireNext(args, ++i, "--text"));
                 case "--styleClass"-> params.put("styleClass", requireNext(args, ++i, "--styleClass"));
                 case "--stageId"   -> params.put("stageId", requireNext(args, ++i, "--stageId"));
+                case "--visible-only" -> params.put("effectiveVisible", true);
                 default            -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
         }
@@ -312,6 +354,7 @@ public class CliCommandDispatcher {
         String savePath = args[1];
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("savePath", savePath);
+        var noLimit = false;
         for (int i = 2; i < args.length; i++) {
             switch (args[i]) {
                 case "--nodeId"   -> params.put("nodeId",
@@ -321,12 +364,40 @@ public class CliCommandDispatcher {
                         Integer.parseInt(requireNext(args, ++i, "--maxWidth")));
                 case "--maxHeight" -> params.put("maxHeight",
                         Integer.parseInt(requireNext(args, ++i, "--maxHeight")));
+                case "--no-limit" -> noLimit = true;
                 default           -> throw new IllegalArgumentException(unknownOptionMessage(args[i]));
             }
+        }
+        if (noLimit) {
+            if (params.containsKey("maxWidth") || params.containsKey("maxHeight")) {
+                throw new IllegalArgumentException("--no-limit cannot be combined with --maxWidth or --maxHeight");
+            }
+            params.put("maxWidth", 0);
+            params.put("maxHeight", 0);
         }
         AgentResponse resp = agent.sendCommand(
                 new AgentCommand(AgentCommand.CommandType.TAKE_SCREENSHOT, params));
         return outputResponse(resp);
+    }
+
+    private static int cmdScroll(JavaFxAgent agent, String[] args) throws Exception {
+        if (args.length < 2) throw new IllegalArgumentException(args[0] + " requires a <nodeId> argument");
+        var params = new LinkedHashMap<String, Object>();
+        params.put("nodeId", parseNodeId(args[1]));
+        var byIndex = "scroll-to-index".equals(args[0]);
+        for (var i = 2; i < args.length; i++) {
+            var flag = args[i];
+            if (byIndex && flag.equals("--index")) {
+                params.put("index", Integer.parseInt(requireNext(args, ++i, flag)));
+            } else if (!byIndex && (flag.equals("--dx") || flag.equals("--dy"))) {
+                params.put(flag.substring(2), Double.parseDouble(requireNext(args, ++i, flag)));
+            } else if (!byIndex && flag.equals("--align")) {
+                params.put("align", requireNext(args, ++i, flag));
+            } else throw new IllegalArgumentException(unknownOptionMessage(flag));
+        }
+        if (byIndex && !params.containsKey("index")) throw new IllegalArgumentException("--index is required");
+        return outputResponse(agent.sendCommand(new AgentCommand(
+                byIndex ? AgentCommand.CommandType.SCROLL_TO_INDEX : AgentCommand.CommandType.SCROLL_NODE, params)));
     }
 
     private static int cmdCaptureVideo(JavaFxAgent agent, String[] args) throws Exception {
@@ -394,8 +465,8 @@ public class CliCommandDispatcher {
     }
 
     private static String requireNext(String[] args, int i, String flag) {
-        if (i >= args.length) {
-            throw new IllegalArgumentException(flag + " requires a value");
+        if (i >= args.length || args[i].isBlank() || args[i].startsWith("--")) {
+            throw new IllegalArgumentException(flag + " requires a non-empty value");
         }
         return args[i];
     }

@@ -68,6 +68,56 @@ For popup verification, retain both forms of evidence when useful:
 - a property or in-process test assertion proving behavior;
 - a native composite screenshot proving final appearance.
 
+## A node exists but cannot be clicked
+
+Read `effectiveVisible` and `visibilityReason`, not only the node's own `visible` flag.
+An invisible or transparent ancestor, collapsed container, zero-size node, or clipping can make
+the node unavailable. Use `node-details <nodeId> --ancestors` to locate the containing component,
+then expand it or scroll it into view. `find-nodes --visible-only` excludes these unavailable nodes.
+This geometry check does not detect sibling or other-window occlusion.
+
+`type` searches JavaFX Node classes and their superclasses. It cannot find a non-Node FXML
+controller or MenuItem itself. Search an open menu's `.menu-item` rendering nodes or text.
+Reacquire popup and cell node IDs after reopening a menu or scrolling virtualized content.
+
+## A menu action returns `handlerPending=true`
+
+The action was dispatched and its handler entered a nested JavaFX event loop, often `showAndWait()`.
+Locate the dialog with `stages`, inspect its nodes, and continue there. After closing it, verify
+the resulting application state. Do not repeat the original action while its handler is pending.
+
+For standard submenus, click the visible submenu rendering node. The command also dispatches
+the mouse-enter event needed by the standard menu skin; it does not move the OS pointer.
+
+## A modal or popup must be closed
+
+Use `close-window <stageId>` for a Stage: it sends the close-request event and respects cancellation.
+Use `close-popup <stageId>` to hide a PopupWindow. A component embedded inside a Scene is neither.
+For AtlantaFX ModalPane, inspect the `display` property and set it to false:
+
+```bash
+$CLI $PID find-nodes --type ModalPane
+$CLI $PID node-details "$NODE_ID" --filter display
+$CLI $PID set-property "$NODE_ID" display false --type boolean
+```
+
+For other embedded components, inspect writable properties or activate their close button.
+JavaFX synthetic keys do not invoke OS-native Cmd+W or Cmd+Q; use the window command for a close request.
+
+## A screenshot is too small or exceeds the safety limit
+
+The screenshot default preserves source dimensions. Remove explicit `--maxWidth` / `--maxHeight`,
+or use `--no-limit` (cannot be combined with those flags). Zero means unlimited on that axis.
+Check `sourceWidth`, `sourceHeight`, and `scaled` in the result.
+Source dimensions over 8192px on either axis or 16,777,216 pixels total are rejected before allocation,
+even with a resize limit. Capture a smaller node in that case. Video defaults remain 1280×720.
+
+## A CLI option reports a missing value
+
+Options require a nonempty value and cannot consume the following `--option` as that value.
+For example, `--stageId "" --depth 2` reports a stageId value error with usage. Retrieve the ID again.
+The positional property value in `set-property <nodeId> text ""` can still intentionally clear text.
+
 ## A command produces excessive or malformed output
 
 - Remove `--json`; JSON is always enabled.

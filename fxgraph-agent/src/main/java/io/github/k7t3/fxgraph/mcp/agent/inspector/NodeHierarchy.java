@@ -5,6 +5,7 @@ import javafx.scene.Parent;
 import javafx.scene.SubScene;
 
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Describes direct containment relationships in a JavaFX scene graph.
@@ -32,5 +33,30 @@ final class NodeHierarchy {
             case Parent parent -> List.copyOf(parent.getChildrenUnmodifiable());
             default -> List.of();
         };
+    }
+
+    /** Returns the containment path from root to target, including SubScene boundaries. */
+    static List<Node> pathTo(Node root, Node target) {
+        var path = new ArrayList<Node>();
+        return collectPath(root, target, path) ? List.copyOf(path) : List.of();
+    }
+
+    /** Returns the containing node, including the SubScene that owns a nested root. */
+    static Node parentOf(Node node) {
+        if (node.getParent() != null) return node.getParent();
+        var scene = node.getScene();
+        if (scene == null || scene.getRoot() == node) return null;
+        var path = pathTo(scene.getRoot(), node);
+        return path.size() > 1 ? path.get(path.size() - 2) : null;
+    }
+
+    private static boolean collectPath(Node node, Node target, List<Node> path) {
+        path.add(node);
+        if (node == target) return true;
+        for (var child : directChildren(node)) {
+            if (collectPath(child, target, path)) return true;
+        }
+        path.removeLast();
+        return false;
     }
 }

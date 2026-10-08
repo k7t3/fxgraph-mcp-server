@@ -12,6 +12,10 @@ public class AgentCommand {
 
     public enum CommandType {
         GET_STAGES,
+        GET_WINDOW_DETAILS,
+        SET_WINDOW_PROPERTY,
+        CLOSE_WINDOW,
+        CLOSE_POPUP,
         GET_SCENEGRAPH,
         GET_NODE_DETAILS,
         FIND_NODES,
@@ -21,6 +25,8 @@ public class AgentCommand {
         ACTIVATE_NODE,
         REQUEST_FOCUS,
         TYPE_KEY,
+        SCROLL_NODE,
+        SCROLL_TO_INDEX,
         TAKE_SCREENSHOT,
         CAPTURE_VIDEO,
         PING,

@@ -39,11 +39,14 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 |---|---|---|
 | Nodes in a JavaFX `Stage` scene | Inspect and interact | — |
 | Additional windows implemented as `Stage` | Inspect with `stages` and `--stageId` | — |
+| Stage geometry/state and close requests | `window-details`, `set-window-property`, `close-window` | Native OS shortcuts are not sent |
 | Showing `PopupWindow`, `ContextMenu`, `MenuButton` popup contents, tooltips | Inspect and interact with the popup's `stageId` | Open the popup before inspection |
+| Close a showing popup | `close-popup` using the current popup ID | Embedded overlays require their own close action or documented property workaround |
+| Virtualized items outside the viewport | `scroll-to-index` or `scroll-node`, then search again | Inspect the container's supported API |
 | Node or individual window scene image | `screenshot` | — |
 | Node or individual window scene motion (up to 30 seconds) | `capture-video` | — |
 | One image containing separately composited popups or OS decorations | Not captured by scene snapshots | Native OS/compositor screenshot |
-| JavaFX click behavior without moving the system pointer | `click-node` uses a complete synthetic gesture by default | Use `--mode robot` only when native pointer input is required |
+| JavaFX click behavior without moving the system pointer | `click-node` uses a complete synthetic gesture | Native pointer input is not supported |
 | Exact OS-specific mouse and keyboard behavior | Not guaranteed | TestFX or approved native UI automation |
 
 For a popup workflow, open the popup first, then rerun `stages`. Popup entries expose `windowType`
@@ -129,17 +132,22 @@ If direct lookup is insufficient:
 ```
 
 Use `select-node` before a risky change when visual confirmation helps. Prefer `set-property` for
-deterministic text entry. `click-node` sends a complete synthetic gesture by default without moving
-the pointer or requesting window focus; use `--mode robot` only when native pointer input is material.
+deterministic text entry. `click-node` sends a complete synthetic JavaFX gesture without moving
+the pointer or requesting window focus. Input commands do not require OS input permissions.
 Use `--button secondary` for a right click and `--clickCount 2` for a double click. The shortcuts
-`right-click-node` and `double-click-node` accept `--mode robot` too. Context menus may take focus.
+`right-click-node` and `double-click-node` use the same synthetic input. Context menus may take focus.
 For menu items, inspect `node.disabled` in `node-details`; omitted means false, while the rendered
 Node's `disable` property alone may not reflect the MenuItem state.
 Use `activate-node` for a deterministic `ButtonBase.fire()` action without mouse input. `type-key`
-defaults to synthetic key gestures; use `--modifiers SHIFT` for Shift+Tab or `--modifiers META --mode robot`
-for native macOS shortcuts. Robot key input requires native keyboard focus and OS permissions, and
-returns failures without synthetic fallback. Verify the application effect; termination may close
-the connection before a response.
+sends synthetic JavaFX key gestures; use `--modifiers SHIFT` for Shift+Tab or `--modifiers META`
+for application shortcuts handled inside JavaFX. Native OS shortcuts are not sent.
+Omit `--mode` or use `--mode synthetic`; the removed `robot` mode returns an error before input.
+Verify the application effect; termination may close the connection before a response.
+Use `node-details --ancestors` to identify a containing cell, and `--visible-only` on `find-nodes`
+to exclude hidden/clipped nodes. These visibility diagnostics do not detect sibling/OS occlusion.
+Rerun `stages` and `find-nodes` after every popup opening, and `find-nodes` after scrolling.
+`handlerPending: true` indicates a dispatched action waiting in a modal handler: inspect and
+dismiss the dialog, then verify the final application state rather than repeating the action.
 
 ## Apply command invariants
 
@@ -149,7 +157,7 @@ the connection before a response.
 - `properties` is an array of `{name, value, type, writable, category}`, not a flat object.
 - Treat IDs as valid only for the current JVM session. After restart, rerun `discover`, `stages`,
   and `find-nodes`; do not reuse PID, window IDs from `stageId`, or node IDs.
-- Inspect JSON error output and exit status before continuing.
+- Inspect stderr and exit status before continuing; errors are plain text, not success JSON.
 - Verify changes through application state, a focused property query, a suitable screenshot, or a
   combination of them.
 - Use `capture-video` when motion over time is material; use `screenshot` for a single visual state.
@@ -157,9 +165,10 @@ the connection before a response.
 ## Load command references only as needed
 
 - Read [inspect-commands.md](references/inspect-commands.md) for exhaustive options and schemas for
-  `discover`, `stages`, `find-nodes`, `scenegraph`, and `node-details`.
+  `discover`, `stages`, `window-details`, `find-nodes`, `scenegraph`, and `node-details`.
 - Read [interact-commands.md](references/interact-commands.md) for `set-property`, `select-node`,
   `click-node`, `right-click-node`, `double-click-node`, `activate-node`, `focus`, `type-key`,
-  `screenshot`, and `capture-video`.
+  `set-window-property`, `close-window`, `close-popup`, overlay workarounds, `scroll-node`,
+  `scroll-to-index`, `screenshot`, and `capture-video`.
 - Read [troubleshooting.md](references/troubleshooting.md) for decision trees covering empty
   discovery, attach failures, stale IDs, popup controls, and composite screenshots.

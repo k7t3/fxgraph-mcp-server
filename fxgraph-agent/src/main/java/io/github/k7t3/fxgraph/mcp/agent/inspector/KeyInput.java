@@ -3,19 +3,17 @@ package io.github.k7t3.fxgraph.mcp.agent.inspector;
 import javafx.scene.Node;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
-import javafx.scene.robot.Robot;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Parses key gestures shared by synthetic and native input. */
+/** Parses and dispatches JavaFX key gestures. */
 final class KeyInput {
     private KeyInput() {}
 
-    record Stroke(KeyCode code, String character, List<KeyCode> modifiers, Mode mode) {
+    record Stroke(KeyCode code, String character, List<KeyCode> modifiers) {
         boolean has(KeyCode modifier) {
             return modifiers.contains(modifier);
         }
@@ -27,17 +25,10 @@ final class KeyInput {
         }
     }
 
-    enum Mode { SYNTHETIC, ROBOT }
-
     static Stroke parse(Map<String, Object> params) {
         if (!(params.get("key") instanceof String key) || key.isEmpty()) {
             throw new IllegalArgumentException("key is required");
         }
-        var mode = switch (String.valueOf(params.getOrDefault("mode", "synthetic")).toLowerCase(Locale.ROOT)) {
-            case "synthetic" -> Mode.SYNTHETIC;
-            case "robot" -> Mode.ROBOT;
-            default -> throw new IllegalArgumentException("Unsupported key mode: " + params.get("mode") + ". Expected synthetic or robot");
-        };
         var modifiers = EnumSet.noneOf(KeyCode.class);
         if (params.get("modifiers") != null) {
             if (!(params.get("modifiers") instanceof List<?> values)) {
@@ -65,10 +56,7 @@ final class KeyInput {
         if (modifiers.contains(KeyCode.CONTROL) || modifiers.contains(KeyCode.ALT) || modifiers.contains(KeyCode.META)) {
             character = "";
         }
-        if (mode == Mode.ROBOT && code == KeyCode.UNDEFINED) {
-            throw new IllegalArgumentException("Robot mode requires a key code: " + key);
-        }
-        return new Stroke(code, character, List.copyOf(modifiers), mode);
+        return new Stroke(code, character, List.copyOf(modifiers));
     }
 
     private static KeyCode keyCode(String key) {
@@ -123,53 +111,4 @@ final class KeyInput {
         target.fireEvent(stroke.event(KeyEvent.KEY_RELEASED));
     }
 
-    interface Keyboard {
-        void press(KeyCode code);
-        void release(KeyCode code);
-    }
-
-    static Keyboard robotKeyboard() {
-        var robot = new Robot();
-        return new Keyboard() {
-            @Override
-            public void press(KeyCode code) { robot.keyPress(code); }
-            @Override
-            public void release(KeyCode code) { robot.keyRelease(code); }
-        };
-    }
-
-    static void robot(Keyboard keyboard, Stroke stroke) {
-        var pressed = new ArrayList<KeyCode>();
-        Throwable failure = null;
-        try {
-            var keys = new ArrayList<>(stroke.modifiers());
-            keys.add(stroke.code());
-            for (var logicalCode : keys) {
-                // macOS Glass maps its physical Command key separately from the META event flag.
-                var code = logicalCode == KeyCode.META && System.getProperty("os.name").startsWith("Mac")
-                        ? KeyCode.COMMAND : logicalCode;
-                // A failed native call may have pressed the key before reporting its error.
-                pressed.add(code);
-                keyboard.press(code);
-            }
-        } catch (RuntimeException | Error error) {
-            failure = error;
-            throw error;
-        } finally {
-            Throwable releaseFailure = null;
-            for (var code : pressed.reversed()) {
-                try {
-                    keyboard.release(code);
-                } catch (RuntimeException | Error error) {
-                    if (releaseFailure == null) releaseFailure = error;
-                    else releaseFailure.addSuppressed(error);
-                }
-            }
-            if (releaseFailure != null) {
-                if (failure != null) failure.addSuppressed(releaseFailure);
-                else if (releaseFailure instanceof RuntimeException error) throw error;
-                else throw (Error) releaseFailure;
-            }
-        }
-    }
 }

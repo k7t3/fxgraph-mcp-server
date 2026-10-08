@@ -45,14 +45,21 @@ AI から JavaFX アプリケーションを Scenic View のように検査・�
 | `connectApplication` | 指定 PID のアプリにインスペクタエージェントを準備する |
 | `disconnectApplication` | 指定 PID のインスペクタエージェントを停止する |
 | `getStages` | Stage（ウィンドウ）一覧を取得する |
+| `getWindowDetails` | Stage・ポップアップの位置・サイズ・状態を取得する |
+| `setWindowProperty` | Stage の位置・サイズ・公開プロパティを変更する |
+| `closeWindow` | 終了要求を送り、アプリ側のキャンセルを尊重する |
+| `closePopup` | 指定 `PopupWindow` を閉じる |
 | `getScenegraph` | シーングラフツリーを取得する |
-| `getNodeDetails` | 指定ノードのプロパティ詳細を取得する |
+| `getNodeDetails` | 指定ノードの詳細・実効表示状態・任意の祖先パスを取得する |
+| `findNodes` | Node クラス・ID・テキスト等で検索し、実効表示状態で絞り込む |
+| `scrollNode` | ピクセル指定または端へのスクロール |
+| `scrollToIndex` | 仮想化コンテナの項目を0始まりのインデックスで表示する |
 | `setProperty` | ノードのプロパティ値を変更する |
 | `selectNode` | ノードをハイライト表示する |
 | `clickNode` | ボタン・クリック回数を指定してクリック。右クリック・ダブルクリックに対応し、既定は合成入力 |
 | `activateNode` | マウス入力なしに `ButtonBase` を起動する |
 | `requestFocus` | ノードにフォーカスを当てる |
-| `typeKey` | 修飾キー付きのキー入力を送信する（synthetic / robot） |
+| `typeKey` | 修飾キー付きの JavaFX 合成キー入力を送信する |
 | `takeScreenshot` | スクリーンショットを PNG で保存する |
 | `captureVideo` | 最大30秒の MP4/H.264 動画クリップを保存する |
 

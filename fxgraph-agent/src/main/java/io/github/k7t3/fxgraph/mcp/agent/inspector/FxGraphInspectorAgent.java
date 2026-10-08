@@ -117,6 +117,10 @@ public class FxGraphInspectorAgent {
         return switch (command.getCommand()) {
             case PING -> AgentResponse.success("pong");
             case GET_STAGES -> inspector.getStages();
+            case GET_WINDOW_DETAILS -> inspector.getWindowDetails(command.getParams());
+            case SET_WINDOW_PROPERTY -> inspector.setWindowProperty(command.getParams());
+            case CLOSE_WINDOW -> inspector.closeWindow(command.getParams());
+            case CLOSE_POPUP -> inspector.closePopup(command.getParams());
             case GET_SCENEGRAPH -> inspector.getScenegraph(command.getParams());
             case GET_NODE_DETAILS -> inspector.getNodeDetails(command.getParams());
             case FIND_NODES -> inspector.findNodes(command.getParams());
@@ -126,6 +130,8 @@ public class FxGraphInspectorAgent {
             case ACTIVATE_NODE -> inspector.activateNode(command.getParams());
             case REQUEST_FOCUS -> inspector.requestFocus(command.getParams());
             case TYPE_KEY -> inspector.typeKey(command.getParams());
+            case SCROLL_NODE -> inspector.scrollNode(command.getParams());
+            case SCROLL_TO_INDEX -> inspector.scrollToIndex(command.getParams());
             case TAKE_SCREENSHOT -> inspector.takeScreenshot(command.getParams());
             case CAPTURE_VIDEO -> inspector.captureVideo(command.getParams());
             case SHUTDOWN -> {

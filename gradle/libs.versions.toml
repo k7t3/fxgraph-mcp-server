@@ -2,6 +2,7 @@
 assertj                   = "3.27.7"
 jackson                   = "2.18.3"
 jcodec                    = "0.2.5"
+flowless                  = "0.7.4"
 junit                     = "5.10.0"
 mockito                   = "5.23.0"
 javafx                    = "21"
@@ -17,6 +18,7 @@ assertj-core              = { module = "org.assertj:assertj-core",              
 jackson-databind          = { module = "com.fasterxml.jackson.core:jackson-databind",            version.ref = "jackson" }
 jcodec-core               = { module = "org.jcodec:jcodec",                                    version.ref = "jcodec" }
 jcodec-javase             = { module = "org.jcodec:jcodec-javase",                             version.ref = "jcodec" }
+flowless                  = { module = "org.fxmisc.flowless:flowless",                         version.ref = "flowless" }
 junit-bom                 = { module = "org.junit:junit-bom",                                    version.ref = "junit" }
 junit-jupiter             = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher   = { module = "org.junit.platform:junit-platform-launcher" }

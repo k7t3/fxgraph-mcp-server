@@ -10,6 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,6 +20,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
@@ -80,6 +83,38 @@ class CliCommandDispatcherTest {
         int code = dispatcher.dispatch(new String[]{"12345", "bogus"});
         assertEquals(1, code);
         assertTrue(errContent.toString().contains("Error:"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "--text"})
+    void findNodesRejectsEmptyOrMissingOptionValue(String value) throws Exception {
+        var code = dispatcher.dispatch(new String[]{
+                "12345", "find-nodes", "--stageId", value, "--text", "閉じる"});
+
+        assertThat(code).isEqualTo(1);
+        assertThat(errContent.toString()).contains("--stageId requires a non-empty value",
+                "Usage: fxgraph <pid> find-nodes [options]");
+        verify(mockAgent, never()).sendCommand(any());
+    }
+
+    @Test
+    void trailingOptionReportsUsage() throws Exception {
+        var code = dispatcher.dispatch(new String[]{"12345", "find-nodes", "--stageId"});
+
+        assertThat(code).isEqualTo(1);
+        assertThat(errContent.toString()).contains("--stageId requires a non-empty value",
+                "Usage: fxgraph <pid> find-nodes [options]");
+        verify(mockAgent, never()).sendCommand(any());
+    }
+
+    @Test
+    void setPropertyPreservesEmptyStringValue() throws Exception {
+        successResponse();
+
+        var code = dispatcher.dispatch(new String[]{"12345", "set-property", "123", "text", ""});
+
+        assertThat(code).isZero();
+        assertThat(captureCommand().getParams()).containsEntry("value", "");
     }
 
     @Test
@@ -228,6 +263,48 @@ class CliCommandDispatcherTest {
     void nodeDetailsInvalidNodeIdReturnsFailure() throws Exception {
         int code = dispatcher.dispatch(new String[]{"12345", "node-details", "abc"});
         assertEquals(1, code);
+    }
+
+    @Test
+    void nodeDetailsRequestsAncestors() throws Exception {
+        successResponse();
+
+        var code = dispatcher.dispatch(new String[]{"12345", "node-details", "123", "--ancestors"});
+
+        assertThat(code).isZero();
+        assertThat(captureCommand().getParams()).containsEntry("includeAncestors", true);
+    }
+
+    @ParameterizedTest
+    @MethodSource("issueCommands")
+    void issueCommandsForwardParameters(String[] args, String command, Map<String, Object> params) throws Exception {
+        successResponse();
+
+        var code = dispatcher.dispatch(args);
+
+        assertThat(code).as(errContent.toString()).isZero();
+        var sent = captureCommand();
+        assertThat(sent.getCommand().name()).isEqualTo(command);
+        assertThat(sent.getParams()).containsExactlyInAnyOrderEntriesOf(params);
+    }
+
+    static Stream<Arguments> issueCommands() {
+        return Stream.of(
+                Arguments.of(new String[]{"12345", "window-details", "--stageId", "s"}, "GET_WINDOW_DETAILS", Map.of("stageId", "s")),
+                Arguments.of(new String[]{"12345", "set-window-property", "s", "x", "100", "--type", "number"}, "SET_WINDOW_PROPERTY",
+                        Map.of("stageId", "s", "propertyName", "x", "value", "100", "valueType", "number")),
+                Arguments.of(new String[]{"12345", "close-window", "s"}, "CLOSE_WINDOW", Map.of("stageId", "s")),
+                Arguments.of(new String[]{"12345", "close-popup", "--stageId", "p"}, "CLOSE_POPUP", Map.of("stageId", "p")),
+                Arguments.of(new String[]{"12345", "scroll-node", "42", "--dy", "500", "--dx", "-20"}, "SCROLL_NODE",
+                        Map.of("nodeId", 42, "dy", 500.0, "dx", -20.0)),
+                Arguments.of(new String[]{"12345", "scroll-node", "42", "--align", "bottom"}, "SCROLL_NODE",
+                        Map.of("nodeId", 42, "align", "bottom")),
+                Arguments.of(new String[]{"12345", "scroll-to-index", "42", "--index", "10"}, "SCROLL_TO_INDEX",
+                        Map.of("nodeId", 42, "index", 10)),
+                Arguments.of(new String[]{"12345", "find-nodes", "--visible-only"}, "FIND_NODES", Map.of("effectiveVisible", true)),
+                Arguments.of(new String[]{"12345", "screenshot", "/tmp/image.png", "--no-limit"}, "TAKE_SCREENSHOT",
+                        Map.of("savePath", "/tmp/image.png", "maxWidth", 0, "maxHeight", 0))
+        );
     }
 
     @Test
@@ -415,24 +492,24 @@ class CliCommandDispatcherTest {
     void clickNodeSendsButtonAndClickCount() throws Exception {
         successResponse();
         var code = dispatcher.dispatch(new String[]{
-                "12345", "click-node", "42", "--button", "secondary", "--clickCount", "2", "--mode", "robot"
+                "12345", "click-node", "42", "--button", "secondary", "--clickCount", "2", "--mode", "synthetic"
         });
 
         assertThat(code).isZero();
         assertThat(captureCommand().getParams()).containsEntry("button", "secondary")
-                .containsEntry("clickCount", 2).containsEntry("mode", "robot");
+                .containsEntry("clickCount", 2).containsEntry("mode", "synthetic");
     }
 
     @ParameterizedTest
     @CsvSource({"right-click-node, button, secondary", "double-click-node, clickCount, 2"})
     void clickShortcutSendsPresetWithRequestedMode(String shortcut, String key, String value) throws Exception {
         successResponse();
-        var code = dispatcher.dispatch(new String[]{"12345", shortcut, "42", "--mode", "robot"});
+        var code = dispatcher.dispatch(new String[]{"12345", shortcut, "42", "--mode", "synthetic"});
 
         assertThat(code).isZero();
         var command = captureCommand();
         assertThat(command.getCommand()).isEqualTo(AgentCommand.CommandType.CLICK_NODE);
-        assertThat(command.getParams()).containsEntry("nodeId", 42).containsEntry("mode", "robot");
+        assertThat(command.getParams()).containsEntry("nodeId", 42).containsEntry("mode", "synthetic");
         assertThat(command.getParams().get(key).toString()).isEqualTo(value);
     }
 
@@ -521,11 +598,11 @@ class CliCommandDispatcherTest {
     void typeKeySendsModifiersAndMode() throws Exception {
         successResponse();
 
-        var code = dispatcher.dispatch(new String[]{"12345", "type-key", "Q", "--modifiers", "META,SHIFT", "--mode", "robot"});
+        var code = dispatcher.dispatch(new String[]{"12345", "type-key", "Q", "--modifiers", "META,SHIFT", "--mode", "synthetic"});
 
         assertThat(code).isZero();
         assertThat(captureCommand().getParams()).containsEntry("modifiers", List.of("META", "SHIFT"))
-                .containsEntry("mode", "robot");
+                .containsEntry("mode", "synthetic");
     }
 
     @Test
@@ -533,7 +610,7 @@ class CliCommandDispatcherTest {
         var code = dispatcher.dispatch(new String[]{"12345", "type-key", "Q", "--modifiers"});
 
         assertThat(code).isEqualTo(1);
-        assertThat(errContent.toString()).contains("--modifiers requires a value");
+        assertThat(errContent.toString()).contains("--modifiers requires a non-empty value");
         verify(mockAgent, never()).sendCommand(any());
     }
 

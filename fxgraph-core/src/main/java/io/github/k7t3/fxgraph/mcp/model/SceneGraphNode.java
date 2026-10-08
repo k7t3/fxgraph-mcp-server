@@ -11,6 +11,11 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SceneGraphNode {
     private int nodeId;
+    private Integer parentId;
+    private Boolean inScene;
+    private Boolean effectiveVisible;
+    private Boolean clipped;
+    private String visibilityReason;
     private String id;
     private String type;
     private List<SceneGraphNode> children;
@@ -28,6 +33,21 @@ public class SceneGraphNode {
     // Getters and Setters
     public int getNodeId() { return nodeId; }
     public void setNodeId(int nodeId) { this.nodeId = nodeId; }
+
+    public Integer getParentId() { return parentId; }
+    public void setParentId(Integer parentId) { this.parentId = parentId; }
+
+    public Boolean getInScene() { return inScene; }
+    public void setInScene(Boolean inScene) { this.inScene = inScene; }
+
+    public Boolean getEffectiveVisible() { return effectiveVisible; }
+    public void setEffectiveVisible(Boolean effectiveVisible) { this.effectiveVisible = effectiveVisible; }
+
+    public Boolean getClipped() { return clipped; }
+    public void setClipped(Boolean clipped) { this.clipped = clipped; }
+
+    public String getVisibilityReason() { return visibilityReason; }
+    public void setVisibilityReason(String visibilityReason) { this.visibilityReason = visibilityReason; }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }

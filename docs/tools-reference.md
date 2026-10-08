@@ -10,6 +10,8 @@ FXGraph MCP Serverは、JavaFXアプリケーションのシーングラフを�
 - ノードプロパティの取得と変更
 - ノードの選択とハイライト
 - ノードのクリック・フォーカス要求・キー入力（JavaFXイベントシステム）
+- ウィンドウの状態取得・属性変更・閉じる要求とポップアップの終了
+- 仮想リストの画素スクロール・行指定と祖先・実効可視状態の取得
 - ノード/シーングラフのスクリーンショット取得
 - ノード/任意の JavaFX ウィンドウシーンの短時間 MP4 動画取得
 
@@ -239,6 +241,7 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 | pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID (identityHashCode of the JavaFX Node) |
 | propertyFilter | array<string> | いいえ | List of property names to include (e.g., ["text", "value"]). Omit to get all properties. |
+| includeAncestors | boolean | いいえ | `true` で直接の親からシーンルートまでの `ancestors` を追加。既定 `false` |
 
 **出力例**:
 ```json
@@ -283,6 +286,10 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 }
 ```
 
+`node.parentId` は直接の包含親の ID です。シーンルートでは省略し、SubScene のルートでは
+包含する SubScene の ID を返します。`includeAncestors=true` の `ancestors` は近い親から順に
+`nodeId`、`type`、`id`（設定時）、`styleClass`、`bounds` を含みます。
+
 ---
 
 ### 7. findNodes
@@ -300,6 +307,18 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 | text | string | いいえ | Text content to search for (case-sensitive contains match) |
 | styleClass | string | いいえ | Style class name to filter |
 | stageId | string | いいえ | Window ID from the stageId field; omit to search all showing windows |
+| effectiveVisible | boolean | いいえ | `true` で実効可視ノード、`false` で実効不可視ノードに限定。省略時は両方 |
+
+`type` は JavaFX `Node` のクラス名（単純名または完全修飾名）と、その親クラスを照合します。
+FXML の非 Node コントローラや `MenuItem` 自体は対象外です。メニューを開いてから
+`styleClass=menu-item` またはテキストで描画ノードを検索してください。
+ノード ID はメニューの再表示、アプリの再起動、仮想セルの再利用後に再取得してください。
+
+`visible` はノード自身のフラグです。`inScene`、`effectiveVisible`、`clipped`、
+`visibilityReason` により祖先の非表示、透明、ゼロサイズ、クリップ、シーン外を区別します。
+部分クリップは `effectiveVisible=true, clipped=true` です。判定には矩形の境界を使い、
+兄弟や別ウィンドウによる遮蔽、非矩形クリップの穴、OS のヒットテストは判定しません。
+検索範囲は表示中のウィンドウに所属するノードで、切り離されたノードを検索するものではありません。
 
 **出力例**:
 ```json
@@ -414,14 +433,14 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 指定したノードの中央へクリックジェスチャーを送ります。
 
-**説明**: 既定では `MOUSE_PRESSED`、`MOUSE_RELEASED`、`MOUSE_CLICKED` の完全な合成ジェスチャーを送り、システムポインターを移動せず、ウィンドウへのフォーカスも要求しません。`mode=robot` を明示すると JavaFX `Robot` がウィンドウへフォーカスを要求し、マウスをノード中央へ移動して指定したボタンで1回または2回クリックします。明示した `Robot` が利用できない場合は合成ジェスチャーへ自動的にフォールバックします。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。
+**説明**: JavaFX 内で `MOUSE_PRESSED`、`MOUSE_RELEASED`、`MOUSE_CLICKED` の完全な合成ジェスチャーを送り、システムポインターを移動せず、ウィンドウへのフォーカスも要求しません。OS の入力権限は不要です。ノードまたは祖先が非表示の場合、disabled の場合、またはサイズがゼロの場合はエラーを返します。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | pid | integer | はい | Process ID of the target JavaFX application |
 | nodeId | integer | はい | Node ID |
-| mode | string | いいえ | `synthetic`（既定）または `robot` |
+| mode | string | いいえ | `synthetic` のみ。省略可 |
 | button | string | いいえ | `primary`（既定）、`secondary`（右）、`middle` |
 | clickCount | integer | いいえ | `1`（既定）または `2`（ダブルクリック） |
 
@@ -438,7 +457,16 @@ PIDを指定してJavaFXアプリケーションを検査できる状態にし�
 
 合成ダブルクリックは回数1、2の完全なジェスチャーを順に送ります。右クリックは `CONTEXT_MENU_REQUESTED` も送り、標準コンテキストメニューを開きます。メニューやアプリのハンドラによってフォーカスが変わる場合があります。独自メニューを開く場合は context-menu request を consume して既定メニューの表示を抑制してください。
 
-Robot のダブルクリック認識は OS の時間・位置条件と直前のクリックに依存します。Robot から合成入力へフォールバックした場合は、`mode` が `synthetic` となり、`fallbackReason` が追加されます。ボタン・クリック回数は維持されます。
+標準サブメニューの描画ノードでは `MOUSE_ENTERED` も送り、サブメニューを開きます。
+マウスイベントの `isSynthesized` はタッチ由来を意味するため `false` です。
+クリックまたは起動ハンドラが `showAndWait()` のネストしたイベントループに入ると、
+`handlerPending=true` を返します。これは配送済みでハンドラが処理中であることを示します。
+表示されたダイアログや後続状態を再検索して確認し、同じ操作を繰り返さないでください。
+
+旧 `mode=robot` を含む未対応モードは入力を送る前にエラーを返します。既存の呼び出しでは `mode` を省略するか、`synthetic` を指定してください。合成クリックは指定ノードへのイベント配送であり、OS のポインター移動やネイティブのヒットテストを再現しません。
+
+旧 Robot モードにはポインター移動やウィンドウのフォーカス変更がありました。現在は削除済みです。
+旧環境の IMK/IMKCFRunLoopWakeUpReliable ログだけで入力の成否を判断せず、アプリの状態を確認してください。
 
 メニュー項目の有効・無効は `getNodeDetails` の `node.disabled` で確認できます。無効時だけ `true` を出力し、省略時は `false` です。標準メニュー項目の状態は描画ノードの `disable` プロパティだけでは判断できないため、MenuItem の無効状態も反映します。
 
@@ -448,7 +476,7 @@ Robot のダブルクリック認識は OS の時間・位置条件と直前の�
 
 指定した `ButtonBase` をマウス入力なしに論理的に起動します。
 
-**説明**: `ButtonBase.fire()` を呼び出します。マウスハンドラやヒットテストを検証するときは `clickNode` を使用してください。
+**説明**: `ButtonBase.fire()` を呼び出します。マウスハンドラやヒットテストを検証するときは `clickNode` を使用してください。`showAndWait()` を開くハンドラでは `handlerPending=true` の意味は `clickNode` と同じです。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -490,11 +518,11 @@ Robot のダブルクリック認識は OS の時間・位置条件と直前の�
 
 ### 13. typeKey
 
-修飾キー付きのキー入力を送信します。既定は合成入力で、Robot による実キー送出も選択できます。
+修飾キー付きの JavaFX 合成キー入力を送信します。OS の入力権限は不要です。
 
 合成入力はキーの押下・解放と、文字入力時の `KEY_TYPED` を送信します。Control・Alt・Meta を含む
-ショートカットでは文字を挿入しません。Robot 入力は対象ウィンドウとノードにフォーカスを要求し、
-実キーを送出します。利用できない場合は合成入力へ切り替えず、エラーを返します。
+ショートカットでは文字を挿入しません。対象ノードに JavaFX 内のフォーカスを要求してから
+イベントを送ります。ウィンドウを前面にする必要はありません。
 
 **入力パラメータ**:
 | パラメータ | 型 | 必須 | 説明 |
@@ -503,7 +531,7 @@ Robot のダブルクリック認識は OS の時間・位置条件と直前の�
 | key | string | はい | Key text or key code name (e.g. 'a', 'ENTER') |
 | nodeId | integer | いいえ | 対象ノード。省略時はフォーカスのあるシーン |
 | modifiers | string[] | いいえ | `SHIFT`、`CTRL`/`CONTROL`、`ALT`、`CMD`/`META`。複数指定可、大文字小文字不問 |
-| mode | string | いいえ | `synthetic`（既定）または `robot` |
+| mode | string | いいえ | `synthetic` のみ。省略可 |
 
 **出力例**:
 ```json
@@ -514,12 +542,12 @@ Robot のダブルクリック認識は OS の時間・位置条件と直前の�
 }
 ```
 
-Robot 入力には OS の操作権限（macOS ではアクセシビリティ）が必要です。文字はキーボード配列に
-依存するため、大文字入力には `SHIFT` を明示してください。成功応答は入力の送出を示し、
-ショートカットの実行結果は対象アプリで確認してください。Cmd+Q などで JVM が終了すると、
-応答前に接続が閉じる場合があります。
-macOS ではアクセシビリティ権限がないと、Robot が例外を返さず入力を無視することもあります。
-フォーカスを取得できない場合は、対象アプリを前面にしてから再試行してください。
+単一文字は Unicode を含め指定した文字を送信できます。`CMD`/`META` は JavaFX イベントの
+Meta フラグを設定します。Shift+Tab やアプリのイベントハンドラ・Scene accelerator は対象ですが、
+OS が処理する Cmd+Q/Cmd+W などのネイティブショートカットは送信しません。
+成功応答はイベント配送を示すため、ショートカットの実行結果は対象アプリで確認してください。
+アプリ側の処理で JVM が終了すると、応答前に接続が閉じる場合があります。
+旧 `mode=robot` を含む未対応モードは入力やフォーカス変更の前にエラーを返します。
 
 ---
 
@@ -537,8 +565,8 @@ macOS ではアクセシビリティ権限がないと、Robot が例外を返�
 | nodeId | integer | いいえ | Target node ID (optional; if omitted, captures full scene graph) |
 | stageId | string | いいえ | Window ID from the stageId field; first available Stage when omitted |
 | savePath | string | はい | Path to save the PNG screenshot |
-| maxWidth | integer | いいえ | Maximum screenshot width (default: 1280) |
-| maxHeight | integer | いいえ | Maximum screenshot height (default: 720) |
+| maxWidth | integer | いいえ | 最大幅。省略または `0` は幅の制限なし。正の整数で縮小を指定 |
+| maxHeight | integer | いいえ | 最大高さ。省略または `0` は高さの制限なし。正の整数で縮小を指定 |
 
 **出力例**:
 ```json
@@ -548,6 +576,9 @@ macOS ではアクセシビリティ権限がないと、Robot が例外を返�
   "savedPath": "/tmp/fxgraph/screenshot.png",
   "width": 800,
   "height": 600,
+  "sourceWidth": 1600,
+  "sourceHeight": 1200,
+  "scaled": true,
   "targetType": "scenegraph",
   "targetId": "123456789"
 }
@@ -555,6 +586,13 @@ macOS ではアクセシビリティ権限がないと、Robot が例外を返�
 
 `Scene.snapshot` は1ウィンドウ単位です。所有 Stage とポップアップを合成した画像が必要な場合は、
 OS の画面キャプチャを使用してください。
+
+既定では元の画素サイズを保持します。縮小時も縦横比を保持し、拡大はしません。
+`sourceWidth` / `sourceHeight` は元画像、`width` / `height` は保存画像、`scaled` は縮小の有無です。
+負数や整数以外の上限は拒否します。元画像が一辺 8192px または総画素数 16,777,216 を超える場合は、
+画像を確保する前に拒否します。縮小指定でもこの安全上限は適用されるため、小さい対象ノードを選択してください。
+安全上限の計算には小数座標による画像境界の外向きの切り上げも含みます。
+CLI の `--no-limit` は両方の上限を `0` にし、`--maxWidth` / `--maxHeight` と併用できません。
 
 ---
 
@@ -599,6 +637,95 @@ OS の画面キャプチャを使用してください。
 
 ---
 
+### 16. getWindowDetails
+
+`getStages` で取得したウィンドウの状態を取得します。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | 対象 JVM の PID |
+| stageId | string | はい | ウィンドウ ID |
+
+`stageId`、`windowType`、`x`、`y`、`width`、`height`、`opacity`、`focused`、`showing`、
+`rootNodeId` を返します。Stage では `title`、`maximized`、`iconified`、`alwaysOnTop`、
+`resizable`、PopupWindow では `ownerWindowId` も返します。
+
+### 17. setWindowProperty
+
+Stage のプロパティを変更します。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | 対象 JVM の PID |
+| stageId | string | はい | Stage の ID |
+| propertyName | string | はい | `x`、`y`、`width`、`height`、`opacity`、`title`、`maximized`、`iconified`、`alwaysOnTop`、`resizable` |
+| value | string | はい | 設定値 |
+| valueType | string | いいえ | `number`、`boolean`、`string`。省略時はプロパティから決定 |
+
+位置とサイズは有限数、サイズは正数、opacity は 0〜1、boolean は `true` / `false` のみです。
+不正値と未対応プロパティは変更前に拒否します。`oldValue` と `newValue` を返します。
+OS が状態を非同期に反映する場合があるため、最終状態は `getWindowDetails` で再確認してください。
+
+### 18. closeWindow
+
+指定ウィンドウへ `WINDOW_CLOSE_REQUEST` を配送します。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | 対象 JVM の PID |
+| stageId | string | はい | ウィンドウ ID |
+
+`closeRequested=true` と実際の `closed` を返します。閉じるハンドラがイベントを consume した場合は
+`closed=false` です。確認ダイアログの `showAndWait()` が始まると `handlerPending=true` を返すので、
+ダイアログを操作してからウィンドウの有無を再確認してください。JVM が終了すると応答前に接続が閉じる場合があります。
+OS の Cmd+W を送らずに、JavaFX の閉じる要求とライフサイクルを扱えます。
+
+### 19. closePopup
+
+指定した表示中の `PopupWindow` を `hide()` で閉じます。Stage は拒否します。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | 対象 JVM の PID |
+| stageId | string | はい | ポップアップ ID |
+
+`closed` を返します。シーン内の独自オーバーレイはウィンドウではありません。
+例えば AtlantaFX `ModalPane` は `findNodes(type="ModalPane")` の後で `setProperty` に
+`propertyName="display", value="false", valueType="boolean"` を指定する回避策が使えます。
+独自コンポーネントは `getNodeDetails` で writable な閉じるプロパティやボタンを確認してください。
+
+### 20. scrollNode
+
+スクロール対象を画素差分または端へ移動します。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | 対象 JVM の PID |
+| nodeId | integer | はい | スクロール対象の ID |
+| dx | number | いいえ | 横方向の画素差分。正値は右 |
+| dy | number | いいえ | 縦方向の画素差分。正値は下 |
+| align | string | いいえ | `top`、`bottom`、`left`、`right`。dx/dy と併用不可 |
+
+dx/dy の少なくとも一方、または align が必要です。ListView、TableView、ScrollPane、JavaFX の
+VirtualFlow、Flowless の VirtualFlow、およびそれを包む VirtualizedScrollPane を扱います。
+JavaFX VirtualFlow の端指定は向きに合うものだけを受け付けます。
+
+### 21. scrollToIndex
+
+仮想化されたリストの行を表示範囲へ移動します。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| pid | integer | はい | 対象 JVM の PID |
+| nodeId | integer | はい | ListView、TableView、JavaFX/Flowless VirtualFlow、または Flowless VirtualizedScrollPane の ID |
+| index | integer | はい | 0 から始まる行番号。範囲外は拒否 |
+
+両スクロールコマンドは `scrolled=true, refreshRequired=true` を返します。
+仮想セルは再利用されるので、操作後に `findNodes` で対象行と ID を取り直してください。
+Flowless は対象アプリの公開 API を使い、Agent の本番依存には追加していません。
+
+---
+
 ## データモデル
 
 ### JavaFxApplication
@@ -635,7 +762,10 @@ OS の画面キャプチャを使用してください。
 ```json
 {
   "nodeId": 987654321,
-  "type": "Button"
+  "type": "Button",
+  "inScene": true,
+  "effectiveVisible": true,
+  "clipped": false
 }
 ```
 
@@ -645,6 +775,11 @@ OS の画面キャプチャを使用してください。
 > - `styleClass`: 空でない場合のみ出力
 > - `bounds`: `includeBounds=true` の場合のみ出力
 > - `children`: 子ノードがある場合のみ出力
+> - `parentId`: 包含親がある場合のみ出力
+> - `inScene`、`effectiveVisible`、`clipped`: 実効可視状態を出力
+> - `visibilityReason`: 実効不可視の理由がある場合のみ出力
+
+以下の例は各オプションに関係するフィールドのみを抜粋しています。
 
 **CSS IDが設定されたノード:**
 ```json

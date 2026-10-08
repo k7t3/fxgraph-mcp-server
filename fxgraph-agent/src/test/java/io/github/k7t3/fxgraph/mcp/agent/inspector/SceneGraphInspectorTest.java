@@ -506,7 +506,7 @@ class SceneGraphInspectorTest {
         var response = inspector.clickNode(Map.of("nodeId", nodeId));
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getError()).isEqualTo("Node is not visible: " + nodeId);
+        assertThat(response.getError()).isEqualTo("Node is not effectively visible: " + nodeId + " (ancestor invisible)");
         assertThat(actions).hasValue(0);
     }
 
@@ -526,10 +526,9 @@ class SceneGraphInspectorTest {
     }
 
     @Test
-    @DisplayName("Should default to a synthetic gesture without using Robot")
-    void shouldDefaultToSyntheticGestureWithoutUsingRobot() {
-        var robotClicks = new AtomicInteger();
-        var inspector = new SceneGraphInspector((point, button, count) -> robotClicks.incrementAndGet());
+    @DisplayName("Should default to a synthetic gesture")
+    void shouldDefaultToSyntheticGesture() {
+        var inspector = createInspector();
         var rectangle = new Rectangle(20, 20);
         var mouseClicks = new AtomicInteger();
         rectangle.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> mouseClicks.incrementAndGet());
@@ -541,7 +540,6 @@ class SceneGraphInspectorTest {
 
         assertThat(response.isSuccess()).isTrue();
         assertThat(castMap(response.getData())).containsEntry("mode", "synthetic");
-        assertThat(robotClicks).hasValue(0);
         assertThat(mouseClicks).hasValue(1);
     }
 
@@ -595,33 +593,10 @@ class SceneGraphInspectorTest {
                         MouseEvent.MOUSE_PRESSED,
                         MouseEvent.MOUSE_RELEASED,
                         MouseEvent.MOUSE_CLICKED);
-        assertThat(events).allMatch(MouseEvent::isSynthesized);
+        assertThat(events).allMatch(event -> !event.isSynthesized());
         assertThat(events.getFirst().isPrimaryButtonDown()).isTrue();
         assertThat(events.get(1).isPrimaryButtonDown()).isFalse();
         assertThat(events.getLast().isPrimaryButtonDown()).isFalse();
-    }
-
-    @Test
-    @DisplayName("Should fall back to a synthetic gesture when Robot is unavailable")
-    void shouldFallBackToSyntheticGestureWhenRobotIsUnavailable() {
-        var inspector = new SceneGraphInspector((point, button, count) -> {
-            throw new UnsupportedOperationException("Robot is unavailable");
-        });
-        var rectangle = new Rectangle(20, 20);
-        var clicks = new AtomicInteger();
-        rectangle.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> clicks.incrementAndGet());
-        runOnFxThread(() -> root.getChildren().setAll(rectangle));
-
-        var response = inspector.clickNode(Map.of(
-                "nodeId", System.identityHashCode(rectangle),
-                "mode", "robot"
-        ));
-
-        assertThat(response.isSuccess()).isTrue();
-        assertThat(castMap(response.getData()))
-                .containsEntry("mode", "synthetic")
-                .containsEntry("fallbackReason", "Robot is unavailable");
-        assertThat(clicks).hasValue(1);
     }
 
     @Test
@@ -642,12 +617,12 @@ class SceneGraphInspectorTest {
 
         var response = inspector.clickNode(Map.of(
                 "nodeId", System.identityHashCode(rectangle),
-                "mode", "robot"
+                "mode", "synthetic"
         ));
 
         var event = clickedEvent.get();
         assertThat(response.isSuccess()).isTrue();
-        assertThat(castMap(response.getData())).containsEntry("mode", "robot");
+        assertThat(castMap(response.getData())).containsEntry("mode", "synthetic");
         assertThat(event).isNotNull();
         assertThat(event.getSource()).isSameAs(rectangle);
         assertThat(event.getTarget()).isSameAs(rectangle);
@@ -685,7 +660,7 @@ class SceneGraphInspectorTest {
         AgentResponse response = inspector.clickNode(Map.of("nodeId", nodeId));
 
         assertFalse(response.isSuccess());
-        assertEquals("Node is not visible or has zero size: " + nodeId, response.getError());
+        assertEquals("Node is not effectively visible: " + nodeId + " (zero-size)", response.getError());
     }
 
     @Test
@@ -705,7 +680,7 @@ class SceneGraphInspectorTest {
 
         assertThat(response.isSuccess()).isFalse();
         assertThat(response.getError()).isEqualTo(
-                "Node is not visible or has zero size: " + nodeId
+                "Node is not effectively visible: " + nodeId + " (zero-size)"
         );
         assertThat(actions).hasValue(0);
     }
@@ -1173,7 +1148,7 @@ class SceneGraphInspectorTest {
     }
 
     @Test
-    void takeScreenshot_usesDefaultHdLimits() {
+    void takeScreenshot_preservesSourceDimensionsByDefault() {
         SceneGraphInspector inspector = createInspector();
         Canvas canvas = new Canvas(1920, 1080);
         runOnFxThread(() -> {
@@ -1183,7 +1158,7 @@ class SceneGraphInspectorTest {
             root.getChildren().setAll(canvas);
         });
         int nodeId = System.identityHashCode(canvas);
-        Path output = tempPngPath("default-hd");
+        Path output = tempPngPath("default-source");
         AgentResponse response = inspector.takeScreenshot(Map.of(
                 "nodeId", nodeId,
                 "savePath", output.toString()
@@ -1193,12 +1168,12 @@ class SceneGraphInspectorTest {
         Map<String, Object> data = castMap(response.getData());
         int width = ((Number) data.get("width")).intValue();
         int height = ((Number) data.get("height")).intValue();
-        assertTrue(width <= 1280, "width should be <= 1280 but was " + width);
-        assertTrue(height <= 720, "height should be <= 720 but was " + height);
+        assertThat(width).isEqualTo(1920);
+        assertThat(height).isEqualTo(1080);
     }
 
     @Test
-    void takeScreenshot_scalesStageWhenExceedsHd() {
+    void takeScreenshot_scalesStageWithExplicitHdLimits() {
         SceneGraphInspector inspector = createInspector();
         Stage testStage = createStage(new Group(), "TestStage");
         String sid = stageId(testStage);
@@ -1210,7 +1185,8 @@ class SceneGraphInspectorTest {
         Path output = tempPngPath("stage-scale");
         AgentResponse response = inspector.takeScreenshot(Map.of(
                 "stageId", sid,
-                "savePath", output.toString()
+                "savePath", output.toString(),
+                "maxWidth", 1280, "maxHeight", 720
         ));
 
         assertTrue(response.isSuccess());
