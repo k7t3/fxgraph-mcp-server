@@ -30,16 +30,19 @@ public class TodoView extends BorderPane {
 
     public TodoView() {
         titleField = new TextField();
+        titleField.setId("todo-title");
         titleField.setPromptText("新しいタスクを入力...");
         titleField.getStyleClass().add("title-field");
         HBox.setHgrow(titleField, Priority.ALWAYS);
 
         descriptionField = new TextField();
+        descriptionField.setId("todo-description");
         descriptionField.setPromptText("説明（オプション）");
         descriptionField.getStyleClass().add("description-field");
         HBox.setHgrow(descriptionField, Priority.ALWAYS);
 
         addButton = new Button("追加");
+        addButton.setId("todo-add");
         addButton.getStyleClass().add("add-button");
 
         HBox inputBox = new HBox(8, titleField, descriptionField, addButton);
@@ -48,28 +51,34 @@ public class TodoView extends BorderPane {
         inputBox.getStyleClass().add("input-box");
 
         listView = new ListView<>();
+        listView.setId("todo-list");
         listView.setCellFactory(lv -> new TodoListCell());
         listView.getStyleClass().add("todo-list");
 
         VBox.setVgrow(listView, Priority.ALWAYS);
 
         allButton = new ToggleButton("すべて");
+        allButton.setId("todo-filter-all");
         allButton.getStyleClass().add("filter-button");
         allButton.setSelected(true);
 
         activeButton = new ToggleButton("未完了");
+        activeButton.setId("todo-filter-active");
         activeButton.getStyleClass().add("filter-button");
 
         completedButton = new ToggleButton("完了済み");
+        completedButton.setId("todo-filter-completed");
         completedButton.getStyleClass().add("filter-button");
 
         ToggleGroup filterGroup = new ToggleGroup();
         filterGroup.getToggles().addAll(allButton, activeButton, completedButton);
 
         statusLabel = new Label();
+        statusLabel.setId("todo-status");
         statusLabel.getStyleClass().add("status-label");
 
         clearCompletedButton = new Button("完了済みを削除");
+        clearCompletedButton.setId("todo-clear-completed");
         clearCompletedButton.getStyleClass().add("clear-button");
 
         HBox filterBox = new HBox(8, allButton, activeButton, completedButton);

@@ -2,6 +2,71 @@
     -fx-background-color: #2e3440;
 }
 
+.workbench-header {
+    -fx-padding: 16 20;
+    -fx-background-color: #3b4252;
+}
+
+.app-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.demo-page {
+    -fx-padding: 20;
+}
+
+.demo-heading {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.demo-help {
+    -fx-text-fill: #d8dee9;
+    -fx-font-size: 13px;
+}
+
+.demo-card {
+    -fx-padding: 14;
+    -fx-background-color: #3b4252;
+    -fx-background-radius: 8;
+}
+
+.demo-status {
+    -fx-text-fill: #a3be8c;
+    -fx-font-family: monospace;
+    -fx-font-size: 12px;
+}
+
+.event-journal {
+    -fx-padding: 8 20 12 20;
+    -fx-background-color: #3b4252;
+}
+
+.event-journal .text-area {
+    -fx-font-family: monospace;
+    -fx-font-size: 12px;
+}
+
+.inspection-target {
+    -fx-background-color: #434c5e;
+    -fx-padding: 16 28;
+    -fx-background-radius: 6;
+    -fx-font-size: 18px;
+}
+
+.context-target {
+    -fx-padding: 24;
+    -fx-background-color: #434c5e;
+    -fx-background-radius: 6;
+}
+
+.capture-canvas {
+    -fx-background-color: #242933;
+    -fx-border-color: #88c0d0;
+    -fx-border-width: 1;
+}
+
 .todo-view {
     -fx-background-color: #2e3440;
 }

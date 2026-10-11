@@ -268,7 +268,10 @@ CLI の完全なオプション仕様は `skills/fxgraph/references/` を参照�
 
 ## 動作確認用サンプルアプリ
 
-AtlantaFX (NordDark テーマ) を使った Todo リストアプリをサンプルとして同梱しています。
+AtlantaFX (NordDark テーマ) を使った機能確認アプリを同梱しています。
+入力・イベント、プロパティ・可視性、ウィンドウ、メニュー、スクロール、画像・動画、Todo の7タブで、
+MCP サーバーとスキルの機能を確認できます。固定 CSS ID、操作結果、イベントログ、全体のリセットを備えています。
+各ツールの確認対象と CLI の実行例は [javafx-test-app/README.md](javafx-test-app/README.md) を参照してください。
 
 ```bash
 ./gradlew :javafx-test-app:run
