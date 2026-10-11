@@ -23,7 +23,7 @@ MCP Client (AI)
 | `fxgraph-agent` | 対象 JVM に注入される Java Agent |
 | `fxgraph-cli` | 軽量 CLI ツール（スタンドアロン JAR） |
 | `fxgraph-mcp-server` | Spring Boot MCP サーバー（STDIO トランスポート） |
-| `javafx-test-app` | 動作確認用サンプル JavaFX アプリ |
+| `javafx-test-app` | fxgraph の機能を保証・検証する JavaFX アプリ |
 
 ---
 
@@ -95,4 +95,4 @@ MCP Client (AI)
 | JUnit | 5.10.0 | テストフレームワーク |
 | Mockito | 5.11.0 | テストモック |
 | JavaFX | 21 | 対象プラットフォーム |
-| AtlantaFX | 2.0.1 | テスト用 JavaFX サンプルアプリ |
+| AtlantaFX | 2.0.1 | 検証用 JavaFX アプリの UI |

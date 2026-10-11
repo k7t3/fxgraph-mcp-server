@@ -1,8 +1,5 @@
 package io.github.k7t3.simplefx.lab;
 
-import io.github.k7t3.simplefx.controller.TodoController;
-import io.github.k7t3.simplefx.view.TodoView;
-import io.github.k7t3.simplefx.viewmodel.TodoViewModel;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
@@ -32,7 +29,7 @@ public final class Workbench extends BorderPane implements AutoCloseable {
     public Workbench(Stage owner) {
         this.owner = owner;
         setId("workbench");
-        var title = new Label("FXGraph 機能確認");
+        var title = new Label("FXGraph 機能検証");
         title.getStyleClass().add("app-title");
         var pid = status("app-pid", "PID: " + ProcessHandle.current().pid());
         var spacer = new Region();
@@ -62,8 +59,7 @@ public final class Workbench extends BorderPane implements AutoCloseable {
                 tab("windows", "ウィンドウ", windows),
                 tab("menus", "メニュー", menus),
                 tab("scroll", "スクロール", scroll),
-                tab("capture", "画像・動画", capture),
-                tab("todo", "Todo", todo()));
+                tab("capture", "画像・動画", capture));
         setCenter(tabs);
         journal.record("初期状態に戻しました。タブの見出しから確認対象を選んでください。");
     }
@@ -75,14 +71,6 @@ public final class Workbench extends BorderPane implements AutoCloseable {
         tab.setGraphic(identified("tab-" + id, new Label(text)));
         tab.setContent(content);
         return tab;
-    }
-
-    private TodoView todo() {
-        var view = new TodoView();
-        var model = new TodoViewModel();
-        new TodoController(view, model);
-        model.addTodo("Todoの操作を確認する", "入力、追加、完了、フィルター、削除を試せます。");
-        return view;
     }
 
     /** 補助画面のリソースを解放する。複数回呼んでもよい。 */

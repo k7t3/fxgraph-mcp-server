@@ -10,7 +10,7 @@ javafx {
 
 application {
     mainClass = 'io.github.k7t3.simplefx.Main'
-    applicationName = 'Simple JavaFX App'
+    applicationName = 'FXGraph Verification Workbench'
 }
 
 dependencies {

@@ -54,7 +54,7 @@ class WorkbenchTest {
         onFx(() -> {
             assertThat(node("workbench-tabs", TabPane.class).getTabs())
                     .extracting(tab -> tab.getId())
-                    .containsExactly("input", "inspection", "windows", "menus", "scroll", "capture", "todo");
+                    .containsExactly("input", "inspection", "windows", "menus", "scroll", "capture");
             return null;
         });
     }
@@ -250,17 +250,6 @@ class WorkbenchTest {
         assertThat(text("input-result")).isEqualTo("送信待ち");
         selectPage("capture");
         assertThat(text("animation-status")).isEqualTo("アニメーション: 停止");
-    }
-
-    @Test
-    void todoWorkflowRemainsAvailable() {
-        selectPage("todo");
-        succeeds(inspector.setProperty(params("todo-title", "propertyName", "text", "value", "追加したタスク")));
-        activate("todo-add");
-
-        var found = inspector.findNodes(Map.of("text", "追加したタスク", "effectiveVisible", true));
-        succeeds(found);
-        assertThat((List<?>) found.getData()).isNotEmpty();
     }
 
     private void selectPage(String id) {

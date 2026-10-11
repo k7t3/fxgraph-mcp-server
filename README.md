@@ -44,7 +44,7 @@ AI → bash → scripts/fxgraph → fxgraph-cli.jar
 | `fxgraph-agent` | 対象 JVM に注入される Java Agent |
 | `fxgraph-cli` | 軽量 CLI ツール（Agent Skills から直接利用） |
 | `fxgraph-mcp-server` | Spring Boot MCP サーバー（STDIO トランスポート） |
-| `javafx-test-app` | 動作確認用サンプル JavaFX アプリ |
+| `javafx-test-app` | fxgraph の機能を保証・検証する JavaFX アプリ |
 
 ## 必要要件
 
@@ -266,11 +266,12 @@ CLI の完全なオプション仕様は `skills/fxgraph/references/` を参照�
 
 `fxgraph-agent` モジュールのテストは Monocle ヘッドレスモードで実行されるため、CI 環境でも追加設定不要です。
 
-## 動作確認用サンプルアプリ
+## 機能検証用アプリ
 
-AtlantaFX (NordDark テーマ) を使った機能確認アプリを同梱しています。
-入力・イベント、プロパティ・可視性、ウィンドウ、メニュー、スクロール、画像・動画、Todo の7タブで、
-MCP サーバーとスキルの機能を確認できます。固定 CSS ID、操作結果、イベントログ、全体のリセットを備えています。
+fxgraph が提供する機能を保証・検証するための JavaFX アプリを同梱しています。
+AtlantaFX (NordDark テーマ) を使い、入力・イベント、プロパティ・可視性、ウィンドウ、
+メニュー、スクロール、画像・動画の6タブで MCP サーバーとスキルの機能を検証します。
+固定 CSS ID、操作結果、イベントログ、全体のリセットを備えています。
 各ツールの確認対象と CLI の実行例は [javafx-test-app/README.md](javafx-test-app/README.md) を参照してください。
 
 ```bash
@@ -288,7 +289,7 @@ MCP サーバーとスキルの機能を確認できます。固定 CSS ID、操
 | JavaFX | 21 | 対象プラットフォーム |
 | JUnit | 5.10.0 | テストフレームワーク |
 | Mockito | 5.11.0 | テストモック |
-| AtlantaFX | 2.0.1 | テスト用サンプルアプリ |
+| AtlantaFX | 2.0.1 | 検証用アプリの UI |
 
 ## 注意事項
 

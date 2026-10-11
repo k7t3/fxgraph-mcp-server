@@ -1,10 +1,11 @@
 # javafx-test-app
 
-FXGraph MCP サーバーと `skills/fxgraph` の機能を試すための JavaFX アプリです。
-機能別の7タブ、操作結果、直近100件のイベントログを備えています。
+fxgraph が提供する機能を保証・検証するための JavaFX アプリです。
+FXGraph MCP サーバーと `skills/fxgraph` の検証対象を機能別の6タブにまとめ、
+操作結果と直近100件のイベントログを備えています。
 画面上部に対象 JVM の PID を表示します。「初期状態に戻す」で補助ウィンドウ、
 ポップアップ、アニメーションを終了し、全タブの内容を作り直せます。
-データはメモリ内だけに保存されます。
+検証用の入力値や一覧データはメモリ内だけに保存されます。
 
 ## 起動
 
@@ -32,7 +33,6 @@ CSS ID は検索用の固定名です。数値の `nodeId`、`stageId` は実行
 | メニュー / `tab-menus` | ContextMenu、MenuButton、MenuBar、無効項目、チェック項目、2段のサブメニュー、モーダルを開く項目 | `context-target`, `open-context-menu`, `menu-button`, `menu-bar`, `menu-status` |
 | スクロール / `tab-scroll` | ListView、TableView、2方向の ScrollPane、JavaFX VirtualFlow、Flowless VirtualFlow、VirtualizedScrollPane | `scroll-list`, `scroll-table`, `scroll-pane`, `flowless-flow`, `wrapped-flow`, `flowless-wrapper`, `scroll-position`, `scroll-selection` |
 | 画像・動画 / `tab-capture` | 原寸・縮小 PNG、動く対象の MP4、再生・一時停止・停止 | `capture-target`（640 × 300）, `animation-marker`, `animation-start`, `animation-pause`, `animation-stop`, `animation-status` |
-| Todo / `tab-todo` | 既存のタスク追加・完了・フィルター・削除 | `todo-title`, `todo-description`, `todo-add`, `todo-list`, `todo-filter-all`, `todo-filter-active`, `todo-filter-completed`, `todo-clear-completed`, `todo-status` |
 
 共通: `workbench-reset` は全体の再初期化、`app-pid` は PID、`last-event` と `event-log` は操作ログです。
 
@@ -200,7 +200,7 @@ ancestors で目的のコンテナーを確認してから使ってください�
 
 アプリのテストは Monocle で起動した画面を実際の SceneGraphInspector から操作し、
 イベントの到達、可視性、SubScene の祖先、ウィンドウ、モーダル、メニュー、
-仮想スクロール、画像、リセットと既存 Todo の結果を検証します。
+仮想スクロール、画像、リセットの結果と検証用6タブの構成を検証します。
 実デスクトップの Attach API、MCP の STDIO、動画とウィンドウマネージャーの挙動は
 起動したアプリへ接続して確認してください。
 
