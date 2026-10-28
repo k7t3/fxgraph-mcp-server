@@ -74,6 +74,9 @@ $CLI $PID right-click-node $NODE_ID
 $CLI $PID double-click-node $NODE_ID
 ```
 
+- `--x X --y Y`: optional local pixel offsets from the node bounds' left/top edges. Supply both,
+  within the bounds. The point picks the frontmost eligible descendant (such as a Slider track).
+  Omit both to preserve the existing center-click target. Transforms are applied to local offsets.
 - `--button`: `primary` (default), `secondary` (right), or `middle`.
 - `--clickCount`: integer `1` (default) or `2` (double click).
 - `right-click-node` presets `--button secondary`; `double-click-node` presets `--clickCount 2`.
@@ -103,6 +106,31 @@ verify the application's resulting state when diagnosing an older installation.
 ```json
 { "clicked": true, "mode": "synthetic", "button": "primary", "clickCount": 1 }
 ```
+
+---
+
+## drag-node
+
+Send a simple primary `MOUSE_PRESSED` → `MOUSE_DRAGGED` × steps → `MOUSE_RELEASED` gesture.
+
+```bash
+# Discover the thumb of the intended control and inspect its local dimensions first.
+$CLI $PID find-nodes --type ScrollBar
+$CLI $PID find-nodes --styleClass thumb
+$CLI $PID node-details "$THUMB_ID" --filter width,height --ancestors
+$CLI $PID drag-node "$THUMB_ID" --from-x 5 --from-y 5 --to-x 125 --to-y 5 --steps 10
+```
+
+`--from-x` / `--from-y` and `--to-x` / `--to-y` are required finite local pixel offsets from the
+selected node's bounds at gesture start. The start must be inside; the end may be outside, allowing
+a thumb to move beyond its initial bounds. The starting point picks a descendant; every event stays
+on that target. `--steps` is an integer 1..120, default 10. Events are sent without delay.
+Only `--mode synthetic` is supported. `dragged: true` confirms dispatch; verify the control's value
+or text selection afterwards. `handlerPending` has the same modal-handler meaning as for clicking.
+
+Use this for ScrollBar/Slider thumbs and TextInputControl selection. It does not generate
+`DRAG_DETECTED`, full-drag `MouseDragEvent`, native pointer movement, timed gestures, or platform
+`DragEvent` drag-and-drop. Input validation completes before the first press.
 
 ---
 

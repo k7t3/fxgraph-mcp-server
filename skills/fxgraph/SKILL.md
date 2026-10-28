@@ -46,6 +46,7 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 | Node or individual window scene image | `screenshot` | — |
 | Node or individual window scene motion (up to 30 seconds) | `capture-video` | — |
 | One image containing separately composited popups or OS decorations | Not captured by scene snapshots | Native OS/compositor screenshot |
+| Local coordinate clicks and simple drags | `click-node --x/--y`, `drag-node` for thumbs and text selection | Platform drag-and-drop is not generated |
 | JavaFX click behavior without moving the system pointer | `click-node` uses a complete synthetic gesture | Native pointer input is not supported |
 | Exact OS-specific mouse and keyboard behavior | Not guaranteed | TestFX or approved native UI automation |
 
@@ -167,7 +168,7 @@ dismiss the dialog, then verify the final application state rather than repeatin
 - Read [inspect-commands.md](references/inspect-commands.md) for exhaustive options and schemas for
   `discover`, `stages`, `window-details`, `find-nodes`, `scenegraph`, and `node-details`.
 - Read [interact-commands.md](references/interact-commands.md) for `set-property`, `select-node`,
-  `click-node`, `right-click-node`, `double-click-node`, `activate-node`, `focus`, `type-key`,
+  `click-node`, `right-click-node`, `double-click-node`, `drag-node`, `activate-node`, `focus`, `type-key`,
   `set-window-property`, `close-window`, `close-popup`, overlay workarounds, `scroll-node`,
   `scroll-to-index`, `screenshot`, and `capture-video`.
 - Read [troubleshooting.md](references/troubleshooting.md) for decision trees covering empty

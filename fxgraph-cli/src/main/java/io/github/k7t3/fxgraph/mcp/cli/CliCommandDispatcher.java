@@ -56,7 +56,7 @@ public class CliCommandDispatcher {
             return CliJsonOutput.failure(
                     "No command specified after PID " + pid
                     + ". Available commands: stages, scenegraph, node-details, find-nodes, set-property,"
-                    + " select-node, click-node, right-click-node, double-click-node, activate-node,"
+                    + " select-node, click-node, drag-node, right-click-node, double-click-node, activate-node,"
                     + " focus, type-key, window-details, set-window-property, close-window, close-popup,"
                     + " scroll-node, scroll-to-index, screenshot, capture-video");
         }
@@ -109,6 +109,7 @@ public class CliCommandDispatcher {
                 case "set-property" -> cmdSetProperty(agent, args);
                 case "select-node"  -> cmdSelectNode(agent, args);
                 case "click-node", "right-click-node", "double-click-node" -> cmdClickNode(agent, args);
+                case "drag-node" -> cmdDragNode(agent, args);
                 case "activate-node" -> cmdActivateNode(agent, args);
                 case "focus"        -> cmdFocus(agent, args);
                 case "type-key"     -> cmdTypeKey(agent, args);
@@ -288,6 +289,10 @@ public class CliCommandDispatcher {
         if ("double-click-node".equals(args[0])) params.put("clickCount", 2);
         for (var i = 2; i < args.length; i++) {
             switch (args[i]) {
+                case "--x", "--y" -> {
+                    var flag = args[i];
+                    params.put(flag.substring(2), Double.parseDouble(requireNext(args, ++i, flag)));
+                }
                 case "--mode" -> params.put("mode", requireNext(args, ++i, "--mode"));
                 case "--button" -> params.put("button", requireNext(args, ++i, "--button"));
                 case "--clickCount" -> {
@@ -304,6 +309,34 @@ public class CliCommandDispatcher {
         var resp = agent.sendCommand(
                 new AgentCommand(AgentCommand.CommandType.CLICK_NODE, params));
         return outputResponse(resp);
+    }
+
+    private static int cmdDragNode(JavaFxAgent agent, String[] args) throws Exception {
+        if (args.length < 2) throw new IllegalArgumentException("drag-node requires a <nodeId> argument");
+        var params = new LinkedHashMap<String, Object>();
+        params.put("nodeId", parseNodeId(args[1]));
+        for (var i = 2; i < args.length; i++) {
+            var flag = args[i];
+            var key = switch (flag) {
+                case "--from-x" -> "fromX";
+                case "--from-y" -> "fromY";
+                case "--to-x" -> "toX";
+                case "--to-y" -> "toY";
+                case "--steps" -> "steps";
+                case "--mode" -> "mode";
+                default -> throw new IllegalArgumentException(unknownOptionMessage(flag));
+            };
+            var value = requireNext(args, ++i, flag);
+            params.put(key, switch (key) {
+                case "steps" -> Integer.parseInt(value);
+                case "mode" -> value;
+                default -> Double.parseDouble(value);
+            });
+        }
+        for (var key : List.of("fromX", "fromY", "toX", "toY")) {
+            if (!params.containsKey(key)) throw new IllegalArgumentException(key + " is required");
+        }
+        return outputResponse(agent.sendCommand(new AgentCommand(AgentCommand.CommandType.DRAG_NODE, params)));
     }
 
     private static int cmdActivateNode(JavaFxAgent agent, String[] args) throws Exception {

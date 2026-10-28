@@ -32,6 +32,7 @@ class StatelessFxgraphServiceTest {
             "setProperty",
             "selectNode",
             "clickNode",
+                "dragNode",
             "activateNode",
             "requestFocus",
             "typeKey",

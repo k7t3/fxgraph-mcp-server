@@ -43,6 +43,10 @@ class IssueToolsTest {
 
     static Stream<Arguments> commands() {
         return Stream.of(
+                Arguments.of("clickNode", new Object[]{12345, 42, null, null, null, 12.5, 7.0}, "CLICK_NODE",
+                        Map.of("nodeId", 42, "x", 12.5, "y", 7.0)),
+                Arguments.of("dragNode", new Object[]{12345, 42, 5.0, 6.0, 150.0, 20.0, 8, null}, "DRAG_NODE",
+                        Map.of("nodeId", 42, "fromX", 5.0, "fromY", 6.0, "toX", 150.0, "toY", 20.0, "steps", 8)),
                 Arguments.of("scrollNode", new Object[]{12345, 42, 12.5, -200.0, null, true}, "SCROLL_NODE",
                         Map.of("nodeId", 42, "dx", 12.5, "dy", -200.0, "dispatchEvent", true)),
                 Arguments.of("getWindowDetails", new Object[]{12345, "s"}, "GET_WINDOW_DETAILS", Map.of("stageId", "s")),

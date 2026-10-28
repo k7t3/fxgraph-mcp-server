@@ -165,6 +165,7 @@ class McpServerStdioIntegrationTest {
                 "setProperty",
                 "selectNode",
                 "clickNode",
+                "dragNode",
                 "activateNode",
                 "requestFocus",
                 "typeKey",
@@ -232,6 +233,19 @@ class McpServerStdioIntegrationTest {
 
         assertThat(tool.inputSchema().properties()).containsKeys("button", "clickCount");
         assertThat(tool.inputSchema().required()).doesNotContain("button", "clickCount");
+    }
+
+    @Test
+    void pointerToolsExposeGestureParameters() {
+        client.initialize();
+        var tools = client.listTools().tools();
+        var click = tools.stream().filter(t -> t.name().equals("clickNode")).findFirst().orElseThrow();
+        var drag = tools.stream().filter(t -> t.name().equals("dragNode")).findFirst().orElseThrow();
+        assertThat(click.inputSchema().properties()).containsKeys("x", "y");
+        assertThat(click.inputSchema().required()).doesNotContain("x", "y");
+        assertThat(drag.inputSchema().properties()).containsKeys("fromX", "fromY", "toX", "toY", "steps", "mode");
+        assertThat(drag.inputSchema().required()).contains("pid", "nodeId", "fromX", "fromY", "toX", "toY");
+        assertThat(drag.inputSchema().required()).doesNotContain("steps", "mode");
     }
 
     @Test

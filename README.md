@@ -133,6 +133,7 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `scrollToIndex` | 仮想化コンテナの項目を0始まりのインデックスで表示 |
 | `setProperty` | ノードのプロパティ値を変更（text・style・visible 等） |
 | `selectNode` | ノードを視覚的にハイライト（赤枠オーバーレイ）。`nodeId=0` で解除 |
+| `dragNode` | ノード内の開始位置から合成ドラッグ。Slider・ScrollBar・テキスト選択に対応 |
 | `clickNode` | ボタン・クリック回数を指定してクリック。右クリック・ダブルクリックに対応し、既定は合成入力 |
 | `activateNode` | `ButtonBase.fire()` でマウス入力なしにボタンを起動 |
 | `requestFocus` | ノードにキーボードフォーカスを要求 |
@@ -217,6 +218,8 @@ $CLI <PID> select-node <NODE_ID>
 # クリック・論理起動・フォーカス・キー入力
 $CLI <PID> click-node <NODE_ID>
 $CLI <PID> click-node <NODE_ID> --mode synthetic
+$CLI <PID> click-node <NODE_ID> --x 100 --y 12
+$CLI <PID> drag-node <THUMB_NODE_ID> --from-x 5 --from-y 5 --to-x 150 --to-y 5 --steps 10
 $CLI <PID> click-node <NODE_ID> --button secondary
 $CLI <PID> click-node <NODE_ID> --clickCount 2
 $CLI <PID> right-click-node <NODE_ID>

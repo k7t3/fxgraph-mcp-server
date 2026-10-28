@@ -584,7 +584,7 @@ public class SceneGraphInspector {
      * with increasing counts. Secondary synthetic clicks also request a context menu.
      *
      * @param params command parameters with {@code nodeId}, optional {@code mode}, {@code button},
-     *               and integer {@code clickCount}
+     *               integer {@code clickCount}, and paired local bounds offsets {@code x}/{@code y}
      * @return success with the effective click mode, or an error response when validation fails
      */
     public AgentResponse clickNode(Map<String, Object> params) {
@@ -596,7 +596,7 @@ public class SceneGraphInspector {
             requireSyntheticMode(params);
             var options = ClickOptions.from(params);
 
-            var outcome = runInteraction(() -> doClickNode(nodeId, options));
+            var outcome = runInteraction(() -> doClickNode(nodeId, options, params));
             if (outcome.error() != null) {
                 return AgentResponse.error(outcome.error());
             }
@@ -610,6 +610,63 @@ public class SceneGraphInspector {
         } catch (Exception e) {
             return AgentResponse.error("Failed to click node: " + describeFailure(e));
         }
+    }
+
+    /**
+     * Sends a simple press-drag-release gesture to the node picked at the starting position.
+     * Coordinates are offsets from the selected node's local bounds at gesture start. End offsets
+     * may extend outside those bounds. Steps defaults to 10 and accepts 1..120; events have no delay.
+     * Full drag-and-drop and native pointer input are not generated.
+     *
+     * @param params nodeId, fromX/fromY, toX/toY, optional steps and synthetic mode
+     * @return dispatch result, with handlerPending when a modal handler is still running
+     */
+    public AgentResponse dragNode(Map<String, Object> params) {
+        try {
+            if (params == null || !(params.get("nodeId") instanceof Number id)) return AgentResponse.error("nodeId is required");
+            requireSyntheticMode(params);
+            var steps = PointerInput.steps(params);
+            var outcome = runInteraction(() -> doDragNode(id.intValue(), params, steps));
+            if (outcome.error() != null) return AgentResponse.error(outcome.error());
+            return AgentResponse.success(Map.of("dragged", true, "mode", "synthetic", "steps", steps,
+                    "handlerPending", outcome.handlerPending()));
+        } catch (Exception e) {
+            return AgentResponse.error("Failed to drag node: " + describeFailure(e));
+        }
+    }
+
+    private String doDragNode(int nodeId, Map<String, Object> params, int steps) {
+        var node = findNodeById(nodeId);
+        if (node == null) return "Node not found: " + nodeId;
+        if (!NodeVisibility.evaluate(node).effectiveVisible()) return "Node is not effectively visible: " + nodeId;
+        if (isInteractionDisabled(node)) return "Node is disabled: " + nodeId;
+        if (hasZeroSize(node, node.getBoundsInLocal())) return "Node has zero size: " + nodeId;
+        var from = PointerInput.point(node, params, "fromX", "fromY", true);
+        var to = PointerInput.point(node, params, "toX", "toY", false);
+        var start = node.localToScene(from);
+        var end = node.localToScene(to);
+        var screenStart = node.localToScreen(from);
+        var screenEnd = node.localToScreen(to);
+        if (screenStart == null || screenEnd == null) return "Node is not attached to a showing window: " + nodeId;
+        var target = PointerInput.pick(node, start);
+        if (target == null) return "No pointer target at fromX/fromY";
+        if (isInteractionDisabled(target)) return "Node is disabled: " + nodeId;
+        // Capture scene coordinates before press: skins may move the picked thumb during the drag.
+        target.fireEvent(createSyntheticMouseEvent(target, MouseEvent.MOUSE_PRESSED, start,
+                screenStart.getX(), screenStart.getY(), MouseButton.PRIMARY, 1, true));
+        try {
+            for (var step = 1; step <= steps; step++) {
+                var fraction = (double) step / steps;
+                var scene = start.add(end.subtract(start).multiply(fraction));
+                var screen = screenStart.add(screenEnd.subtract(screenStart).multiply(fraction));
+                target.fireEvent(createSyntheticMouseEvent(target, MouseEvent.MOUSE_DRAGGED, scene,
+                        screen.getX(), screen.getY(), MouseButton.PRIMARY, 1, false));
+            }
+        } finally {
+            target.fireEvent(createSyntheticMouseEvent(target, MouseEvent.MOUSE_RELEASED, end,
+                    screenEnd.getX(), screenEnd.getY(), MouseButton.PRIMARY, 1, false));
+        }
+        return null;
     }
 
     /**
@@ -816,7 +873,7 @@ public class SceneGraphInspector {
         return number.intValue();
     }
 
-    private String doClickNode(int nodeId, ClickOptions options) {
+    private String doClickNode(int nodeId, ClickOptions options, Map<String, Object> params) {
         var node = findNodeById(nodeId);
         if (node == null) return "Node not found: " + nodeId;
         var visibility = NodeVisibility.evaluate(node);
@@ -830,6 +887,17 @@ public class SceneGraphInspector {
 
         double localX = bounds.getMinX() + (bounds.getWidth() / 2.0);
         double localY = bounds.getMinY() + (bounds.getHeight() / 2.0);
+        if (params.containsKey("x") || params.containsKey("y")) {
+            var local = PointerInput.point(node, params, "x", "y", true);
+            var scene = node.localToScene(local);
+            var picked = PointerInput.pick(node, scene);
+            if (picked == null) return "No pointer target at x/y";
+            if (isInteractionDisabled(picked)) return "Node is disabled: " + nodeId;
+            node = picked;
+            local = node.sceneToLocal(scene);
+            localX = local.getX();
+            localY = local.getY();
+        }
         var screenCoordinates = node.localToScreen(localX, localY);
         if (screenCoordinates == null) {
             return "Node is not attached to a showing window: " + nodeId;
@@ -905,7 +973,13 @@ public class SceneGraphInspector {
             double screenY,
             MouseButton button,
             int clickCount) {
-        var pressed = eventType == MouseEvent.MOUSE_PRESSED;
+        return createSyntheticMouseEvent(node, eventType, sceneCoordinates, screenX, screenY, button, clickCount, true);
+    }
+
+    private MouseEvent createSyntheticMouseEvent(Node node, EventType<MouseEvent> eventType,
+            Point2D sceneCoordinates, double screenX, double screenY, MouseButton button,
+            int clickCount, boolean stillSincePress) {
+        var pressed = eventType == MouseEvent.MOUSE_PRESSED || eventType == MouseEvent.MOUSE_DRAGGED;
         return new MouseEvent(
                 eventType,
                 sceneCoordinates.getX(), sceneCoordinates.getY(),
@@ -916,7 +990,7 @@ public class SceneGraphInspector {
                 pressed && button == MouseButton.PRIMARY,
                 pressed && button == MouseButton.MIDDLE,
                 pressed && button == MouseButton.SECONDARY,
-                false, button == MouseButton.SECONDARY && eventType == MouseEvent.MOUSE_RELEASED, true,
+                false, button == MouseButton.SECONDARY && eventType == MouseEvent.MOUSE_RELEASED, stillSincePress,
                 new PickResult(node, sceneCoordinates.getX(), sceneCoordinates.getY())
         );
     }
