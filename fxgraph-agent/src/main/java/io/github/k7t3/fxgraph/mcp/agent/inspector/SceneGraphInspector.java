@@ -271,7 +271,7 @@ public class SceneGraphInspector {
 
     /**
      * Extracts text content from a node, supporting {@link javafx.scene.control.Labeled}
-     * and {@link javafx.scene.control.TextInputControl} (TextField, TextArea, PasswordField).
+     * {@link javafx.scene.control.TextInputControl}, and {@link javafx.scene.text.Text}.
      */
     private String getTextContent(Node node) {
         if (node instanceof javafx.scene.control.TextInputControl textInput) {
@@ -279,6 +279,9 @@ public class SceneGraphInspector {
         }
         if (node instanceof javafx.scene.control.Labeled labeled) {
             return labeled.getText();
+        }
+        if (node instanceof javafx.scene.text.Text text) {
+            return text.getText();
         }
         return null;
     }

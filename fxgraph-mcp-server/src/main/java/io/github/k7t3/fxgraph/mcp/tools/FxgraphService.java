@@ -205,7 +205,7 @@ public class FxgraphService {
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "JavaFX class name to filter (e.g., 'Button', 'TextField'). Omit to match all types.", required = false) String type,
             @ToolParam(description = "CSS id (fx:id) to match exactly. Omit to match all ids.", required = false) String id,
-            @ToolParam(description = "Text content to search for (case-sensitive contains match). Omit to match all text.", required = false) String text,
+            @ToolParam(description = "Text content in Labeled, TextInputControl or Text (case-sensitive contains match; TextFlow fragments are searched individually). Omit to match all text.", required = false) String text,
             @ToolParam(description = "Style class name to filter. Omit to match all style classes.", required = false) String styleClass,
             @ToolParam(description = "Window ID from the stageId field. Omit to search all showing Stage and PopupWindow scenes.", required = false) String stageId,
             @ToolParam(description = "Filter by effective visibility, accounting for ancestors, opacity, clipping and scene viewport; does not detect occlusion by other nodes/windows", required = false) Boolean effectiveVisible) {

@@ -105,6 +105,10 @@ POPUP_ID=$($CLI $PID stages | jq -r --arg owner "$STAGE_ID" \
 ## find-nodes
 
 Search all showing Stage and popup scene graphs without serializing the full tree.
+Text matching includes `Labeled`, `TextInputControl`, and `Text` (including TextFlow children).
+Each matching node includes its `text` and `parentId`; use `node-details --ancestors` to trace a
+fragment back to its TextFlow. TextFlow fragments are searched individually, without concatenation.
+Control skins can also contain Text nodes, so use `--type Label` / `--type Text` to narrow results.
 
 ```bash
 $CLI $PID find-nodes [OPTIONS]
