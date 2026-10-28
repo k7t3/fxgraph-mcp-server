@@ -255,6 +255,18 @@ in the target; the agent does not install it. Positive `--dx` / `--dy` move righ
 values move left/up. `--align` accepts `top`, `bottom`, `left`, or `right` and cannot be combined
 with pixel deltas. For standard virtual flows, the edge must match their scrolling orientation.
 
+Use `--dispatch-event` to test wheel/trackpad event handlers instead of directly changing scroll
+position. It emits one `ScrollEvent.SCROLL` through the viewport and its ancestors; application
+filters may consume it. In this mode `--dx` / `--dy` are **raw JavaFX event deltas**, with their
+sign and amount preserved: negative `--dy` scrolls down, positive scrolls up with standard skins.
+`--align` is rejected. `eventDispatched: true` confirms dispatch, not a changed position;
+`handlerPending: true` means a modal handler is still running. Native inertia and touch gestures
+are not generated. ScrollPane, ListView and JavaFX VirtualFlow use their normal event handlers.
+
+```bash
+$CLI $PID scroll-node "$SCROLL_PANE_ID" --dy -200 --dispatch-event
+```
+
 `--index` is zero-based and must refer to an existing item. `ScrollPane` has no index navigation.
 Scrolling lays out newly visible cells; rerun `find-nodes` afterwards, because recycled or newly
 created cells can change their node IDs. `refreshRequired: true` also marks this in the response.

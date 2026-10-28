@@ -58,6 +58,20 @@ final class ScrollOperations {
         return Map.of("nodeId", System.identityHashCode(node), "scrolled", true, "refreshRequired", true);
     }
 
+    static void dispatch(Node node, Map<String, Object> params) {
+        var dx = delta(params, "dx");
+        var dy = delta(params, "dy");
+        if (params.containsKey("align")) throw new IllegalArgumentException("dispatchEvent cannot be combined with align");
+        if (!params.containsKey("dx") && !params.containsKey("dy")) throw new IllegalArgumentException("dx or dy is required");
+        layout(node);
+        // Target the skin's viewport so its default scroll handler participates in bubbling.
+        var target = node instanceof ScrollPane ? node.lookup(".viewport")
+                : node instanceof ListView<?> || node instanceof TableView<?> ? node.lookup(".virtual-flow") : node;
+        if (target == null) throw new IllegalArgumentException("Scrollable viewport is not available");
+        fireScroll(target, -dx, -dy);
+        layout(node);
+    }
+
     static Map<String, Object> scrollToIndex(Node node, Map<String, Object> params) {
         var value = params.get("index");
         if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())

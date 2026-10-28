@@ -228,19 +228,26 @@ public class FxgraphService {
     }
 
     /** Scrolls supported containers and lays out the new visible cells before responding. */
-    @Tool(description = "Scroll a ListView, TableView, ScrollPane, JavaFX VirtualFlow, Flowless VirtualFlow or VirtualizedScrollPane. Use dx/dy pixels (positive right/down) or align (top/bottom/left/right), exclusively. Re-run findNodes afterwards because virtualized cell IDs may change.")
+    @Tool(description = "Scroll a ListView, TableView, ScrollPane, JavaFX VirtualFlow, Flowless VirtualFlow or VirtualizedScrollPane. By default use direct dx/dy pixels (positive right/down) or align (top/bottom/left/right), exclusively. With dispatchEvent=true, emit ScrollEvent.SCROLL with raw dx/dy (negative right/down); align is unavailable and filters may consume the event. Re-run findNodes afterwards because virtualized cell IDs may change.")
     public Map<String, Object> scrollNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Scrollable container node ID") int nodeId,
             @ToolParam(description = "Horizontal pixel delta, positive right", required = false) Double dx,
             @ToolParam(description = "Vertical pixel delta, positive down", required = false) Double dy,
-            @ToolParam(description = "Edge: top, bottom, left or right. Cannot be combined with dx/dy", required = false) String align) {
+            @ToolParam(description = "Edge: top, bottom, left or right. Cannot be combined with dx/dy or dispatchEvent", required = false) String align,
+            @ToolParam(description = "Dispatch ScrollEvent instead of direct scrolling; dx/dy are raw JavaFX event deltas (negative down/right). Filters may consume the event.", required = false) Boolean dispatchEvent) {
         var params = new LinkedHashMap<String, Object>();
         params.put("nodeId", nodeId);
         if (dx != null) params.put("dx", dx);
         if (dy != null) params.put("dy", dy);
         if (align != null) params.put("align", align);
+        if (dispatchEvent != null) params.put("dispatchEvent", dispatchEvent);
         return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.SCROLL_NODE, params));
+    }
+
+    /** Preserves direct scrolling for existing Java callers. */
+    public Map<String, Object> scrollNode(int pid, int nodeId, Double dx, Double dy, String align) {
+        return scrollNode(pid, nodeId, dx, dy, align, null);
     }
 
     /** Reveals a zero-based item in a supported virtualized container. */

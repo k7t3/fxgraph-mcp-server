@@ -290,6 +290,8 @@ class CliCommandDispatcherTest {
 
     static Stream<Arguments> issueCommands() {
         return Stream.of(
+                Arguments.of(new String[]{"12345", "scroll-node", "42", "--dy", "-200", "--dispatch-event"}, "SCROLL_NODE",
+                        Map.of("nodeId", 42, "dy", -200.0, "dispatchEvent", true)),
                 Arguments.of(new String[]{"12345", "window-details", "--stageId", "s"}, "GET_WINDOW_DETAILS", Map.of("stageId", "s")),
                 Arguments.of(new String[]{"12345", "set-window-property", "s", "x", "100", "--type", "number"}, "SET_WINDOW_PROPERTY",
                         Map.of("stageId", "s", "propertyName", "x", "value", "100", "valueType", "number")),

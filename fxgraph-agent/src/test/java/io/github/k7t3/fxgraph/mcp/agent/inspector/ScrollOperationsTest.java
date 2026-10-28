@@ -107,6 +107,58 @@ class ScrollOperationsTest {
     }
 
     @Test
+    void eventScrollPreservesDeltasAndAllowsFilterToConsume() {
+        var pane = new ScrollPane(new Rectangle(2000, 2000));
+        var events = new java.util.ArrayList<javafx.scene.input.ScrollEvent>();
+        onFx(() -> pane.addEventFilter(javafx.scene.input.ScrollEvent.SCROLL, event -> {
+            events.add(event);
+            event.consume();
+        }));
+        show(pane);
+
+        for (var dy : java.util.List.of(-200.0, 100.0)) {
+            var response = inspector.scrollNode(Map.of("nodeId", System.identityHashCode(pane),
+                    "dx", 12.5, "dy", dy, "dispatchEvent", true));
+            assertThat(response.isSuccess()).as(response.getError()).isTrue();
+        }
+
+        assertThat(events).extracting(javafx.scene.input.ScrollEvent::getDeltaY).containsExactly(-200.0, 100.0);
+        assertThat(events).allSatisfy(event -> {
+            assertThat(event.getDeltaX()).isEqualTo(12.5);
+            assertThat(event.getTotalDeltaY()).isEqualTo(event.getDeltaY());
+        });
+        onFx(() -> assertThat(pane.getVvalue()).isZero());
+    }
+
+    @Test
+    void eventScrollMovesScrollPaneAndListThroughTheirSkins() {
+        var pane = new ScrollPane(new Rectangle(2000, 2000));
+        show(pane);
+        assertThat(inspector.scrollNode(Map.of("nodeId", System.identityHashCode(pane),
+                "dy", -200, "dispatchEvent", true)).isSuccess()).isTrue();
+        onFx(() -> assertThat(pane.getVvalue()).isPositive());
+
+        var list = new ListView<>(FXCollections.observableArrayList(items()));
+        show(list);
+        assertThat(inspector.scrollNode(Map.of("nodeId", System.identityHashCode(list),
+                "dy", -500, "dispatchEvent", true)).isSuccess()).isTrue();
+        onFx(() -> assertThat(((javafx.scene.control.skin.VirtualFlow<?>) list.lookup(".virtual-flow"))
+                .getFirstVisibleCell().getIndex()).isPositive());
+    }
+
+    @Test
+    void eventScrollRejectsAlignmentAndInvalidFlagWithoutMutation() {
+        var pane = new ScrollPane(new Rectangle(2000, 2000));
+        show(pane);
+        for (var params : java.util.List.<Map<String, Object>>of(
+                Map.of("nodeId", System.identityHashCode(pane), "align", "bottom", "dispatchEvent", true),
+                Map.of("nodeId", System.identityHashCode(pane), "dy", 200, "dispatchEvent", "true"))) {
+            assertThat(inspector.scrollNode(params).isSuccess()).isFalse();
+        }
+        onFx(() -> assertThat(pane.getVvalue()).isZero());
+    }
+
+    @Test
     void flowlessIndexNavigationCreatesNewCells() {
         var flow = flowless();
         show(flow);

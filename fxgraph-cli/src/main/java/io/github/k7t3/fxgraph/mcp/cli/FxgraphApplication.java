@@ -13,7 +13,7 @@ package io.github.k7t3.fxgraph.mcp.cli;
  *   fxgraph &lt;pid&gt; set-window-property &lt;stageId&gt; &lt;property&gt; &lt;value&gt; [--type TYPE]
  *   fxgraph &lt;pid&gt; close-window &lt;stageId&gt;
  *   fxgraph &lt;pid&gt; close-popup &lt;stageId&gt;
- *   fxgraph &lt;pid&gt; scroll-node &lt;nodeId&gt; [--dx N] [--dy N] [--align top|bottom|left|right]
+ *   fxgraph &lt;pid&gt; scroll-node &lt;nodeId&gt; [--dx N] [--dy N] [--align top|bottom|left|right] [--dispatch-event]
  *   fxgraph &lt;pid&gt; scroll-to-index &lt;nodeId&gt; --index N
  *   fxgraph &lt;pid&gt; set-property &lt;nodeId&gt; &lt;property&gt; &lt;value&gt; [--type TYPE]
  *   fxgraph &lt;pid&gt; select-node &lt;nodeId&gt; [--no-bounds]
@@ -97,7 +97,7 @@ public class FxgraphApplication {
         System.err.println("      Send a key gesture into a node or the focused scene (default: synthetic).");
         System.err.println("      Modifiers: SHIFT, CTRL/CONTROL, ALT, CMD/META. Only synthetic JavaFX input is supported.");
         System.err.println();
-        System.err.println("  fxgraph <pid> scroll-node <nodeId> [--dx N] [--dy N] [--align top|bottom|left|right]");
+        System.err.println("  fxgraph <pid> scroll-node <nodeId> [--dx N] [--dy N] [--align top|bottom|left|right] [--dispatch-event]");
         System.err.println("  fxgraph <pid> scroll-to-index <nodeId> --index N");
         System.err.println("      Scroll supported containers; positive pixels move right/down. Re-run find-nodes afterwards.");
         System.err.println();

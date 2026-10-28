@@ -43,12 +43,14 @@ class IssueToolsTest {
 
     static Stream<Arguments> commands() {
         return Stream.of(
+                Arguments.of("scrollNode", new Object[]{12345, 42, 12.5, -200.0, null, true}, "SCROLL_NODE",
+                        Map.of("nodeId", 42, "dx", 12.5, "dy", -200.0, "dispatchEvent", true)),
                 Arguments.of("getWindowDetails", new Object[]{12345, "s"}, "GET_WINDOW_DETAILS", Map.of("stageId", "s")),
                 Arguments.of("setWindowProperty", new Object[]{12345, "s", "x", "100", "number"}, "SET_WINDOW_PROPERTY",
                         Map.of("stageId", "s", "propertyName", "x", "value", "100", "valueType", "number")),
                 Arguments.of("closeWindow", new Object[]{12345, "s"}, "CLOSE_WINDOW", Map.of("stageId", "s")),
                 Arguments.of("closePopup", new Object[]{12345, "p"}, "CLOSE_POPUP", Map.of("stageId", "p")),
-                Arguments.of("scrollNode", new Object[]{12345, 42, -20.0, 500.0, null}, "SCROLL_NODE",
+                Arguments.of("scrollNode", new Object[]{12345, 42, -20.0, 500.0, null, null}, "SCROLL_NODE",
                         Map.of("nodeId", 42, "dx", -20.0, "dy", 500.0)),
                 Arguments.of("scrollToIndex", new Object[]{12345, 42, 10}, "SCROLL_TO_INDEX", Map.of("nodeId", 42, "index", 10)),
                 Arguments.of("getNodeDetails", new Object[]{12345, 42, List.of("text"), true}, "GET_NODE_DETAILS",

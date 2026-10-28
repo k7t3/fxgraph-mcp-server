@@ -129,7 +129,7 @@ AI エージェントに `skills/fxgraph/SKILL.md` を読み込ませること�
 | `getScenegraph` | シーングラフのツリー構造を取得（深さ・プロパティ・バウンズ指定可） |
 | `getNodeDetails` | 特定ノードの詳細、実効表示状態、任意の祖先パスを取得 |
 | `findNodes` | タイプ・CSS ID・テキスト・スタイルクラス・実効表示状態からノードを検索 |
-| `scrollNode` | ピクセル指定または端へのスクロール |
+| `scrollNode` | ピクセル指定または端へのスクロール、任意で ScrollEvent 配送 |
 | `scrollToIndex` | 仮想化コンテナの項目を0始まりのインデックスで表示 |
 | `setProperty` | ノードのプロパティ値を変更（text・style・visible 等） |
 | `selectNode` | ノードを視覚的にハイライト（赤枠オーバーレイ）。`nodeId=0` で解除 |
@@ -204,6 +204,8 @@ $CLI <PID> close-window <STAGE_ID>
 $CLI <PID> close-popup <POPUP_ID>
 $CLI <PID> scroll-to-index <LIST_NODE_ID> --index 10
 $CLI <PID> scroll-node <LIST_NODE_ID> --dy 500
+# イベント配送では JavaFX の符号をそのまま使用（負の dy で下方向）
+$CLI <PID> scroll-node <LIST_NODE_ID> --dy -200 --dispatch-event
 
 # プロパティを変更
 $CLI <PID> set-property <NODE_ID> text "Hello"

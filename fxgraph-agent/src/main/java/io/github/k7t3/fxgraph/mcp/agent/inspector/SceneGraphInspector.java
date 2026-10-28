@@ -131,8 +131,30 @@ public class SceneGraphInspector {
         }
     }
 
-    /** Scrolls a supported container by pixels or to an edge; positive deltas move down/right. */
+    /** Scrolls directly (positive down/right), or dispatches a ScrollEvent with unmodified dx/dy when dispatchEvent is true. */
     public AgentResponse scrollNode(Map<String, Object> params) {
+        if (params != null && params.containsKey("dispatchEvent")) {
+            if (!(params.get("dispatchEvent") instanceof Boolean)) return AgentResponse.error("dispatchEvent must be a boolean");
+            if (Boolean.TRUE.equals(params.get("dispatchEvent"))) {
+                try {
+                    if (!(params.get("nodeId") instanceof Number id)) return AgentResponse.error("nodeId is required");
+                    var outcome = runInteraction(() -> {
+                        var node = findNodeById(id.intValue());
+                        if (node == null) return "Node not found: " + id;
+                        var visibility = NodeVisibility.evaluate(node);
+                        if (!visibility.effectiveVisible()) return "Node is not effectively visible: " + id;
+                        if (node.isDisabled()) return "Node is disabled: " + id;
+                        ScrollOperations.dispatch(node, params);
+                        return null;
+                    });
+                    if (outcome.error() != null) return AgentResponse.error(outcome.error());
+                    return AgentResponse.success(Map.of("nodeId", id.intValue(), "eventDispatched", true,
+                            "handlerPending", outcome.handlerPending(), "refreshRequired", true));
+                } catch (Exception e) {
+                    return AgentResponse.error("Failed to dispatch scroll event: " + describeFailure(e));
+                }
+            }
+        }
         return scroll(params, false);
     }
 

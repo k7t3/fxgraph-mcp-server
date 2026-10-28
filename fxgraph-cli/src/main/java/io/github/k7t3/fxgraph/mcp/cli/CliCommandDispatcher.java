@@ -391,6 +391,8 @@ public class CliCommandDispatcher {
                 params.put("index", Integer.parseInt(requireNext(args, ++i, flag)));
             } else if (!byIndex && (flag.equals("--dx") || flag.equals("--dy"))) {
                 params.put(flag.substring(2), Double.parseDouble(requireNext(args, ++i, flag)));
+            } else if (!byIndex && flag.equals("--dispatch-event")) {
+                params.put("dispatchEvent", true);
             } else if (!byIndex && flag.equals("--align")) {
                 params.put("align", requireNext(args, ++i, flag));
             } else throw new IllegalArgumentException(unknownOptionMessage(flag));
