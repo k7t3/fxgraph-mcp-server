@@ -1562,17 +1562,6 @@ public class SceneGraphInspector {
         return name;
     }
 
-    private static String windowClassName(Window window) {
-        Class<?> type = window.getClass();
-        var name = type.getSimpleName();
-        while (name.isEmpty()) {
-            type = type.getSuperclass();
-            if (type == null) return "Unknown";
-            name = type.getSimpleName();
-        }
-        return name;
-    }
-
     private static String windowId(Window window) {
         return String.valueOf(System.identityHashCode(window));
     }
@@ -1581,7 +1570,7 @@ public class SceneGraphInspector {
         var scene = window.getScene();
         var result = new LinkedHashMap<String, Object>();
         result.put("stageId", windowId(window));
-        result.put("windowType", windowClassName(window));
+        result.put("windowType", WindowOperations.typeName(window));
         if (window instanceof Stage stage) {
             result.put("title", stage.getTitle());
         }

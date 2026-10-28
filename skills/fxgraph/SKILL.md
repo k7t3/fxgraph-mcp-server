@@ -40,7 +40,7 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 | Nodes in a JavaFX `Stage` scene | Inspect and interact | — |
 | Additional windows implemented as `Stage` | Inspect with `stages` and `--stageId` | — |
 | Stage geometry/state and close requests | `window-details`, `set-window-property`, `close-window` | Native OS shortcuts are not sent |
-| Showing `PopupWindow`, `ContextMenu`, `MenuButton` popup contents, tooltips | Inspect and interact with the popup's `stageId` | Open the popup before inspection |
+| Showing `Popup`, `PopupControl` (ComboBox), `ContextMenu`, `Tooltip` | Inspect and interact with the popup's `stageId` | Open the popup before inspection |
 | Close a showing popup | `close-popup` using the current popup ID | Embedded overlays require their own close action or documented property workaround |
 | Virtualized items outside the viewport | `scroll-to-index` or `scroll-node`, then search again | Inspect the container's supported API |
 | Node or individual window scene image | `screenshot` | — |
@@ -50,8 +50,10 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 | JavaFX click behavior without moving the system pointer | `click-node` uses a complete synthetic gesture | Native pointer input is not supported |
 | Exact OS-specific mouse and keyboard behavior | Not guaranteed | TestFX or approved native UI automation |
 
-For a popup workflow, open the popup first, then rerun `stages`. Popup entries expose `windowType`
-and `ownerWindowId`; the legacy `stageId` field identifies both Stage and popup windows. Use that ID
+For a popup workflow, save the owner Stage ID, open the popup, then rerun `stages`. Popup entries
+expose `windowType` and `ownerWindowId`; standard ComboBox popups use `windowType: "PopupControl"`.
+`PopupWindow` is a base class, not the ComboBox output value. The legacy `stageId` field identifies
+both Stage and popup windows. Use that ID
 with `find-nodes`, `scenegraph`, `screenshot`, or `capture-video`. A popup is enumerable only while
 it is showing. Scene snapshots capture one window at a time, so verify a final image containing both
 the owner and its popup with an OS screenshot. Request Accessibility, Screen Recording, GUI, or

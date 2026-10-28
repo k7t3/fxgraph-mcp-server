@@ -21,10 +21,20 @@ final class WindowOperations {
                 .findFirst().orElseThrow(() -> new IllegalArgumentException("Window not found: " + stageId));
     }
 
+    static String typeName(Window window) {
+        Class<?> type = window.getClass();
+        while (type != null) {
+            var name = type.getSimpleName();
+            if (!name.isEmpty()) return name;
+            type = type.getSuperclass();
+        }
+        return "Unknown";
+    }
+
     static Map<String, Object> details(Window window) {
         var result = new LinkedHashMap<String, Object>();
         result.put("stageId", String.valueOf(System.identityHashCode(window)));
-        result.put("windowType", window.getClass().getSimpleName());
+        result.put("windowType", typeName(window));
         result.put("x", window.getX());
         result.put("y", window.getY());
         result.put("width", window.getWidth());

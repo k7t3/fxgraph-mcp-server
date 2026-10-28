@@ -39,7 +39,7 @@ actual JavaFX application JVM starts.
 ## stages
 
 List showing JavaFX windows in a running process. This includes `Stage` and `PopupWindow`
-subclasses such as `ContextMenu` and `Tooltip`.
+subclasses such as `PopupControl` (standard ComboBox popups), `ContextMenu`, and `Tooltip`.
 
 ```bash
 $CLI $PID stages
@@ -74,7 +74,19 @@ $CLI $PID stages
 ```
 
 - `stageId` — legacy field name for the ID of either a Stage or popup window.
-- `windowType` — runtime window type, for example `Stage`, `Popup`, `ContextMenu`, or `Tooltip`.
+- `windowType` — runtime class simple name, falling back to the first named superclass for an
+  anonymous class. `stages` and `window-details` use the same naming rule. Common values:
+
+  | Value | Typical window |
+  |---|---|
+  | `Stage` | Application window |
+  | `Popup` | A plain JavaFX Popup |
+  | `PopupControl` | Standard ComboBox popup (its skin uses an anonymous PopupControl subclass) |
+  | `ContextMenu` | Context menu or MenuButton menu |
+  | `Tooltip` | Showing tooltip |
+
+  `PopupWindow` is the base class, not the value to match for a standard ComboBox.
+  Named application subclasses can return other values; inspect the actual output first.
 - `ownerWindowId` — present for a popup with an owner; use it to associate the popup with its Stage.
 - `title` — present for Stage entries.
 - `rootNodeId` — use this as the entry point for `scenegraph`.
@@ -93,11 +105,16 @@ $ROOT = (& $CLI $PID stages | jq '.[] | select(.focused) | .rootNodeId')
 $STAGE_ID = (& $CLI $PID stages | jq -r '.[] | select(.focused) | .stageId')
 ```
 
-To select a popup associated with that Stage:
+Save the owner `STAGE_ID` before opening a popup; focus can move to the popup afterwards.
+For a standard ComboBox, open its dropdown, then select the one `PopupControl` belonging to that
+Stage. The following bash/zsh example requires the existing `CLI`, `PID`, and `STAGE_ID` values;
+it rejects zero or multiple matches rather than combining window IDs:
 
 ```bash
-POPUP_ID=$($CLI $PID stages | jq -r --arg owner "$STAGE_ID" \
-  '.[] | select(.ownerWindowId == $owner) | .stageId')
+POPUP_ID=$("$CLI" "$PID" stages | jq -er --arg owner "$STAGE_ID" '
+  [.[] | select(.ownerWindowId == $owner and .windowType == "PopupControl")]
+  | if length == 1 then .[0].stageId else error("Expected exactly one ComboBox popup") end')
+"$CLI" "$PID" find-nodes --stageId "$POPUP_ID"
 ```
 
 ---
