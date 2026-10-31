@@ -1255,8 +1255,10 @@ class SceneGraphInspectorTest {
 
         assertTrue(response.isSuccess());
         List<Map<String, Object>> results = castList(response.getData());
-        assertEquals(1, results.size());
-        assertEquals("Submit", results.get(0).get("text"));
+        assertThat(results).anySatisfy(result -> assertThat(result)
+                .containsEntry("nodeId", System.identityHashCode(button))
+                .containsEntry("text", "Submit"));
+        assertThat(results).allSatisfy(result -> assertThat(result).containsEntry("text", "Submit"));
     }
 
     @Test
@@ -1337,8 +1339,10 @@ class SceneGraphInspectorTest {
 
         assertTrue(response.isSuccess());
         List<Map<String, Object>> results = castList(response.getData());
-        assertEquals(1, results.size());
-        assertEquals("Enter username", results.get(0).get("text"));
+        assertThat(results).anySatisfy(result -> assertThat(result)
+                .containsEntry("nodeId", System.identityHashCode(field))
+                .containsEntry("text", "Enter username"));
+        assertThat(results).allSatisfy(result -> assertThat(result).containsEntry("text", "Enter username"));
     }
 
     @Test
@@ -1357,8 +1361,10 @@ class SceneGraphInspectorTest {
 
         assertTrue(response.isSuccess());
         List<Map<String, Object>> results = castList(response.getData());
-        assertEquals(1, results.size());
-        assertEquals("Multi-line\ntext content", results.get(0).get("text"));
+        assertThat(results).anySatisfy(result -> assertThat(result)
+                .containsEntry("nodeId", System.identityHashCode(area))
+                .containsEntry("text", "Multi-line\ntext content"));
+        assertThat(results).allSatisfy(result -> assertThat(result).containsEntry("text", "Multi-line\ntext content"));
     }
 
     @Test

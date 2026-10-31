@@ -40,17 +40,20 @@ fxgraph repository root. Do not rebuild an installed skill unless its repository
 | Nodes in a JavaFX `Stage` scene | Inspect and interact | — |
 | Additional windows implemented as `Stage` | Inspect with `stages` and `--stageId` | — |
 | Stage geometry/state and close requests | `window-details`, `set-window-property`, `close-window` | Native OS shortcuts are not sent |
-| Showing `PopupWindow`, `ContextMenu`, `MenuButton` popup contents, tooltips | Inspect and interact with the popup's `stageId` | Open the popup before inspection |
+| Showing `Popup`, `PopupControl` (ComboBox), `ContextMenu`, `Tooltip` | Inspect and interact with the popup's `stageId` | Open the popup before inspection |
 | Close a showing popup | `close-popup` using the current popup ID | Embedded overlays require their own close action or documented property workaround |
 | Virtualized items outside the viewport | `scroll-to-index` or `scroll-node`, then search again | Inspect the container's supported API |
 | Node or individual window scene image | `screenshot` | — |
 | Node or individual window scene motion (up to 30 seconds) | `capture-video` | — |
 | One image containing separately composited popups or OS decorations | Not captured by scene snapshots | Native OS/compositor screenshot |
+| Local coordinate clicks and simple drags | `click-node --x/--y`, `drag-node` for thumbs and text selection | Platform drag-and-drop is not generated |
 | JavaFX click behavior without moving the system pointer | `click-node` uses a complete synthetic gesture | Native pointer input is not supported |
 | Exact OS-specific mouse and keyboard behavior | Not guaranteed | TestFX or approved native UI automation |
 
-For a popup workflow, open the popup first, then rerun `stages`. Popup entries expose `windowType`
-and `ownerWindowId`; the legacy `stageId` field identifies both Stage and popup windows. Use that ID
+For a popup workflow, save the owner Stage ID, open the popup, then rerun `stages`. Popup entries
+expose `windowType` and `ownerWindowId`; standard ComboBox popups use `windowType: "PopupControl"`.
+`PopupWindow` is a base class, not the ComboBox output value. The legacy `stageId` field identifies
+both Stage and popup windows. Use that ID
 with `find-nodes`, `scenegraph`, `screenshot`, or `capture-video`. A popup is enumerable only while
 it is showing. Scene snapshots capture one window at a time, so verify a final image containing both
 the owner and its popup with an OS screenshot. Request Accessibility, Screen Recording, GUI, or
@@ -167,7 +170,7 @@ dismiss the dialog, then verify the final application state rather than repeatin
 - Read [inspect-commands.md](references/inspect-commands.md) for exhaustive options and schemas for
   `discover`, `stages`, `window-details`, `find-nodes`, `scenegraph`, and `node-details`.
 - Read [interact-commands.md](references/interact-commands.md) for `set-property`, `select-node`,
-  `click-node`, `right-click-node`, `double-click-node`, `activate-node`, `focus`, `type-key`,
+  `click-node`, `right-click-node`, `double-click-node`, `drag-node`, `activate-node`, `focus`, `type-key`,
   `set-window-property`, `close-window`, `close-popup`, overlay workarounds, `scroll-node`,
   `scroll-to-index`, `screenshot`, and `capture-video`.
 - Read [troubleshooting.md](references/troubleshooting.md) for decision trees covering empty

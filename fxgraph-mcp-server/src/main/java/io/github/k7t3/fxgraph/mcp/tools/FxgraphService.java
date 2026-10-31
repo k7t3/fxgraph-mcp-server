@@ -205,7 +205,7 @@ public class FxgraphService {
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "JavaFX class name to filter (e.g., 'Button', 'TextField'). Omit to match all types.", required = false) String type,
             @ToolParam(description = "CSS id (fx:id) to match exactly. Omit to match all ids.", required = false) String id,
-            @ToolParam(description = "Text content to search for (case-sensitive contains match). Omit to match all text.", required = false) String text,
+            @ToolParam(description = "Text content in Labeled, TextInputControl or Text (case-sensitive contains match; TextFlow fragments are searched individually). Omit to match all text.", required = false) String text,
             @ToolParam(description = "Style class name to filter. Omit to match all style classes.", required = false) String styleClass,
             @ToolParam(description = "Window ID from the stageId field. Omit to search all showing Stage and PopupWindow scenes.", required = false) String stageId,
             @ToolParam(description = "Filter by effective visibility, accounting for ancestors, opacity, clipping and scene viewport; does not detect occlusion by other nodes/windows", required = false) Boolean effectiveVisible) {
@@ -228,19 +228,26 @@ public class FxgraphService {
     }
 
     /** Scrolls supported containers and lays out the new visible cells before responding. */
-    @Tool(description = "Scroll a ListView, TableView, ScrollPane, JavaFX VirtualFlow, Flowless VirtualFlow or VirtualizedScrollPane. Use dx/dy pixels (positive right/down) or align (top/bottom/left/right), exclusively. Re-run findNodes afterwards because virtualized cell IDs may change.")
+    @Tool(description = "Scroll a ListView, TableView, ScrollPane, JavaFX VirtualFlow, Flowless VirtualFlow or VirtualizedScrollPane. By default use direct dx/dy pixels (positive right/down) or align (top/bottom/left/right), exclusively. With dispatchEvent=true, emit ScrollEvent.SCROLL with raw dx/dy (negative right/down); align is unavailable and filters may consume the event. Re-run findNodes afterwards because virtualized cell IDs may change.")
     public Map<String, Object> scrollNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Scrollable container node ID") int nodeId,
             @ToolParam(description = "Horizontal pixel delta, positive right", required = false) Double dx,
             @ToolParam(description = "Vertical pixel delta, positive down", required = false) Double dy,
-            @ToolParam(description = "Edge: top, bottom, left or right. Cannot be combined with dx/dy", required = false) String align) {
+            @ToolParam(description = "Edge: top, bottom, left or right. Cannot be combined with dx/dy or dispatchEvent", required = false) String align,
+            @ToolParam(description = "Dispatch ScrollEvent instead of direct scrolling; dx/dy are raw JavaFX event deltas (negative down/right). Filters may consume the event.", required = false) Boolean dispatchEvent) {
         var params = new LinkedHashMap<String, Object>();
         params.put("nodeId", nodeId);
         if (dx != null) params.put("dx", dx);
         if (dy != null) params.put("dy", dy);
         if (align != null) params.put("align", align);
+        if (dispatchEvent != null) params.put("dispatchEvent", dispatchEvent);
         return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.SCROLL_NODE, params));
+    }
+
+    /** Preserves direct scrolling for existing Java callers. */
+    public Map<String, Object> scrollNode(int pid, int nodeId, Double dx, Double dy, String align) {
+        return scrollNode(pid, nodeId, dx, dy, align, null);
     }
 
     /** Reveals a zero-based item in a supported virtualized container. */
@@ -296,9 +303,11 @@ public class FxgraphService {
      * @param mode synthetic only; null selects the default
      * @param button primary (default), secondary or middle; null selects the default
      * @param clickCount 1 (default) or 2; null selects the default
+     * @param x optional offset from the local bounds left edge; requires y
+     * @param y optional offset from the local bounds top edge; requires x
      * @return agent response with the synthetic mode, button and click count
      */
-    @Tool(description = "Click a node with primary, secondary or middle button and one or two clicks. Dispatches JavaFX gestures without OS pointer movement or window focus. Secondary clicks request a context menu; standard submenus receive mouse-enter. Only synthetic input is supported. handlerPending=true means a dispatched action is waiting in a modal handler: inspect its dialog and verify the eventual result, without repeating the action.")
+    @Tool(description = "Click a node with primary, secondary or middle button and one or two clicks. Optional paired x/y are local bounds offsets that pick a descendant; omit both for the existing center click. Dispatches JavaFX gestures without OS pointer movement or window focus. Secondary clicks request a context menu; standard submenus receive mouse-enter. Only synthetic input is supported. handlerPending=true means a dispatched action is waiting in a modal handler: inspect its dialog and verify the eventual result, without repeating the action.")
     public Map<String, Object> clickNode(
             @ToolParam(description = "Process ID of the target JavaFX application") int pid,
             @ToolParam(description = "Node ID") int nodeId,
@@ -307,7 +316,9 @@ public class FxgraphService {
             @ToolParam(description = "Mouse button: primary (default), secondary (right), or middle", required = false)
                     String button,
             @ToolParam(description = "Number of clicks: 1 (default) or 2 for a double click", required = false)
-                    Integer clickCount) {
+                    Integer clickCount,
+            @ToolParam(description = "Local x offset from node bounds left edge; supply both x and y to hit-test descendants", required = false) Double x,
+            @ToolParam(description = "Local y offset from node bounds top edge; omit both for existing center click", required = false) Double y) {
 
         var params = new LinkedHashMap<String, Object>();
         params.put("nodeId", nodeId);
@@ -321,8 +332,49 @@ public class FxgraphService {
             params.put("clickCount", clickCount);
         }
 
+        if (x != null) params.put("x", x);
+        if (y != null) params.put("y", y);
         return sendAgentCommand(pid,
                 new AgentCommand(AgentCommand.CommandType.CLICK_NODE, params));
+    }
+
+    /** Preserves the existing Java click overload without coordinates. */
+    public Map<String, Object> clickNode(int pid, int nodeId, String mode, String button, Integer clickCount) {
+        return clickNode(pid, nodeId, mode, button, clickCount, null, null);
+    }
+
+    /**
+     * Dispatches a simple primary-button drag without native pointer movement.
+     *
+     * @param pid target JVM process ID
+     * @param nodeId node whose local bounds define the coordinate origin
+     * @param fromX starting x offset, within the node bounds
+     * @param fromY starting y offset, within the node bounds
+     * @param toX ending x offset, allowed outside the bounds
+     * @param toY ending y offset, allowed outside the bounds
+     * @param steps number of drag events, 1..120, default 10
+     * @param mode synthetic only, or null for the default
+     * @return dispatch result; handlerPending indicates a modal handler is waiting
+     */
+    @Tool(description = "Send a simple primary press-drag-release gesture. Coordinates are local pixel offsets from node bounds at gesture start; the starting point picks a descendant and all events stay on that target. End coordinates may extend outside bounds. steps is 1..120 (default 10); events have no delay. Supports ScrollBar/Slider thumbs and text selection, without OS input, full-drag or platform drag-and-drop. handlerPending=true means a modal handler is still waiting; inspect it instead of retrying.")
+    public Map<String, Object> dragNode(
+            @ToolParam(description = "Target JavaFX process ID") int pid,
+            @ToolParam(description = "Node ID defining the local coordinate frame") int nodeId,
+            @ToolParam(description = "Starting x offset within node bounds") double fromX,
+            @ToolParam(description = "Starting y offset within node bounds") double fromY,
+            @ToolParam(description = "Ending x offset, may be outside node bounds") double toX,
+            @ToolParam(description = "Ending y offset, may be outside node bounds") double toY,
+            @ToolParam(description = "Number of MOUSE_DRAGGED events, integer 1..120, default 10", required = false) Integer steps,
+            @ToolParam(description = "synthetic only (default)", required = false) String mode) {
+        var params = new LinkedHashMap<String, Object>();
+        params.put("nodeId", nodeId);
+        params.put("fromX", fromX);
+        params.put("fromY", fromY);
+        params.put("toX", toX);
+        params.put("toY", toY);
+        if (steps != null) params.put("steps", steps);
+        if (mode != null) params.put("mode", mode);
+        return sendAgentCommand(pid, new AgentCommand(AgentCommand.CommandType.DRAG_NODE, params));
     }
 
     /**

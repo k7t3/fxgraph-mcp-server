@@ -74,6 +74,9 @@ $CLI $PID right-click-node $NODE_ID
 $CLI $PID double-click-node $NODE_ID
 ```
 
+- `--x X --y Y`: optional local pixel offsets from the node bounds' left/top edges. Supply both,
+  within the bounds. The point picks the frontmost eligible descendant (such as a Slider track).
+  Omit both to preserve the existing center-click target. Transforms are applied to local offsets.
 - `--button`: `primary` (default), `secondary` (right), or `middle`.
 - `--clickCount`: integer `1` (default) or `2` (double click).
 - `right-click-node` presets `--button secondary`; `double-click-node` presets `--clickCount 2`.
@@ -103,6 +106,31 @@ verify the application's resulting state when diagnosing an older installation.
 ```json
 { "clicked": true, "mode": "synthetic", "button": "primary", "clickCount": 1 }
 ```
+
+---
+
+## drag-node
+
+Send a simple primary `MOUSE_PRESSED` → `MOUSE_DRAGGED` × steps → `MOUSE_RELEASED` gesture.
+
+```bash
+# Discover the thumb of the intended control and inspect its local dimensions first.
+$CLI $PID find-nodes --type ScrollBar
+$CLI $PID find-nodes --styleClass thumb
+$CLI $PID node-details "$THUMB_ID" --filter width,height --ancestors
+$CLI $PID drag-node "$THUMB_ID" --from-x 5 --from-y 5 --to-x 125 --to-y 5 --steps 10
+```
+
+`--from-x` / `--from-y` and `--to-x` / `--to-y` are required finite local pixel offsets from the
+selected node's bounds at gesture start. The start must be inside; the end may be outside, allowing
+a thumb to move beyond its initial bounds. The starting point picks a descendant; every event stays
+on that target. `--steps` is an integer 1..120, default 10. Events are sent without delay.
+Only `--mode synthetic` is supported. `dragged: true` confirms dispatch; verify the control's value
+or text selection afterwards. `handlerPending` has the same modal-handler meaning as for clicking.
+
+Use this for ScrollBar/Slider thumbs and TextInputControl selection. It does not generate
+`DRAG_DETECTED`, full-drag `MouseDragEvent`, native pointer movement, timed gestures, or platform
+`DragEvent` drag-and-drop. Input validation completes before the first press.
 
 ---
 
@@ -254,6 +282,18 @@ Flowless `VirtualFlow`, and Flowless `VirtualizedScrollPane` wrapping one. Flowl
 in the target; the agent does not install it. Positive `--dx` / `--dy` move right/down; negative
 values move left/up. `--align` accepts `top`, `bottom`, `left`, or `right` and cannot be combined
 with pixel deltas. For standard virtual flows, the edge must match their scrolling orientation.
+
+Use `--dispatch-event` to test wheel/trackpad event handlers instead of directly changing scroll
+position. It emits one `ScrollEvent.SCROLL` through the viewport and its ancestors; application
+filters may consume it. In this mode `--dx` / `--dy` are **raw JavaFX event deltas**, with their
+sign and amount preserved: negative `--dy` scrolls down, positive scrolls up with standard skins.
+`--align` is rejected. `eventDispatched: true` confirms dispatch, not a changed position;
+`handlerPending: true` means a modal handler is still running. Native inertia and touch gestures
+are not generated. ScrollPane, ListView and JavaFX VirtualFlow use their normal event handlers.
+
+```bash
+$CLI $PID scroll-node "$SCROLL_PANE_ID" --dy -200 --dispatch-event
+```
 
 `--index` is zero-based and must refer to an existing item. `ScrollPane` has no index navigation.
 Scrolling lays out newly visible cells; rerun `find-nodes` afterwards, because recycled or newly
